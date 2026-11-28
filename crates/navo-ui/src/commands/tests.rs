@@ -9,7 +9,7 @@ use super::{
 use crate::app_menu::MenuCommand;
 use crate::host_os::HOST_OS;
 
-const NAMESPACES: [&str; 31] = [
+const NAMESPACES: [&str; 32] = [
     "activity_strip",
     "app_menu",
     "can_trace",
@@ -36,6 +36,7 @@ const NAMESPACES: [&str; 31] = [
     "shortcuts",
     "side_sheet",
     "space_view",
+    "terminal",
     "viewer",
     "viewer_markdown",
     "viewer_pdf",

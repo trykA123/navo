@@ -2,7 +2,7 @@ use fluent_bundle::{FluentArgs, FluentResource, FluentValue, concurrent::FluentB
 use thiserror::Error;
 use unic_langid::LanguageIdentifier;
 
-pub const FILES: [(&str, &str); 15] = [
+pub const FILES: [(&str, &str); 16] = [
     ("app.ftl", include_str!("../locales/en-US/app.ftl")),
     (
         "buttonbar.ftl",
@@ -30,6 +30,10 @@ pub const FILES: [(&str, &str); 15] = [
         include_str!("../locales/en-US/clipboard.ftl"),
     ),
     ("setup.ftl", include_str!("../locales/en-US/setup.ftl")),
+    (
+        "terminal.ftl",
+        include_str!("../locales/en-US/terminal.ftl"),
+    ),
 ];
 
 const LOCALE: &str = "en-US";

@@ -14,7 +14,7 @@ const TERMINAL_PROVIDERS: [Choice; 5] = [
     choice("settings-terminal-provider-custom", "custom"),
 ];
 
-pub(super) const GENERAL: [FieldSpec; 34] = [
+pub(super) const GENERAL: [FieldSpec; 35] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "settings-theme-help"),
@@ -178,6 +178,11 @@ pub(super) const GENERAL: [FieldSpec; 34] = [
             "settings-terminal-drawer-height-help",
         ),
         Control::Number,
+    ),
+    spec(
+        (F::TerminalShell, S::Tools, "terminal.shell"),
+        ("settings-terminal-shell", "settings-terminal-shell-help"),
+        Control::Text,
     ),
     spec(
         (F::EditorPath, S::Tools, "editor.path"),

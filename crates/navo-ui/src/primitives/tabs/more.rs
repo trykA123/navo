@@ -10,7 +10,7 @@ use gpui_kit::{
 use navo_l10n::t;
 
 use super::plan::MORE_WIDTH;
-use super::{SelectHandler, Tab};
+use super::{SelectHandler, Tab, status_slot};
 use crate::primitives::icon;
 use crate::primitives::popup_menu::{
     ChooseHandler, Keys, PopupMenu, choose, toggle, wire_anchor, wire_keys,
@@ -163,6 +163,16 @@ fn row((index, tab): (usize, Tab), props: RowProps) -> AnyElement {
             choose(&state, (position, &on_choose), window, cx);
         })
         .when_some(tab.icon, |d, name| d.child(icon(name, px(14.), muted)))
-        .child(div().flex_1().min_w_0().truncate().child(label))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .when(tab.italic, |d| d.italic())
+                .truncate()
+                .child(label),
+        )
+        .when_some(tab.status, |d, status| {
+            d.child(status_slot(t, index, status))
+        })
         .into_any_element()
 }

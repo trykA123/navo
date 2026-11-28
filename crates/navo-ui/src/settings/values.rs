@@ -407,6 +407,14 @@ impl Values {
         }
     }
 
+    /// Returns the configured built-in terminal shell (`""` means first detected shell).
+    pub fn terminal_shell(&self) -> &str {
+        match self.get(Field::TerminalShell) {
+            Value::Text(text) => text.as_ref(),
+            _ => "",
+        }
+    }
+
     pub fn editor_path(&self) -> Option<String> {
         match self.get(Field::EditorPath) {
             Value::Text(text) if !text.is_empty() => Some(text.to_string()),

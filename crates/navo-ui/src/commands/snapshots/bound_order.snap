@@ -687,3 +687,9 @@ find_results.toggle_lines | alt-h | FindResults
 find_results.keep | ctrl-s | FindResults
 find_results.stop | escape | FindResults
 find_results.stop | escape | FindResults > Input
+[terminal]
+terminal.new_session | ctrl-shift-t | Terminal
+terminal.open_shell_picker | ctrl-shift-space | Terminal
+terminal.close_session | ctrl-shift-w | Terminal
+terminal.next_session | ctrl-tab | Terminal
+terminal.previous_session | ctrl-shift-tab | Terminal

@@ -99,4 +99,5 @@ pub fn bind_keys(cx: &mut App) {
     super::compare_keys::bind_keys(cx);
     crate::commands::bind_namespace(cx, "navo_window");
     crate::commands::bind_namespace(cx, "find_results");
+    crate::terminal::bind_keys(cx);
 }

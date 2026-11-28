@@ -2554,3 +2554,23 @@ keys = ["escape"]
 command = "find_results.stop"
 keys = ["escape"]
 context = "FindResults > Input"
+
+[[bind]]
+command = "terminal.new_session"
+keys = ["ctrl-shift-t"]
+
+[[bind]]
+command = "terminal.open_shell_picker"
+keys = ["ctrl-shift-space"]
+
+[[bind]]
+command = "terminal.close_session"
+keys = ["ctrl-shift-w"]
+
+[[bind]]
+command = "terminal.next_session"
+keys = ["ctrl-tab"]
+
+[[bind]]
+command = "terminal.previous_session"
+keys = ["ctrl-shift-tab"]

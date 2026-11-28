@@ -1,21 +1,26 @@
-//! Bottom terminal drawer view, module-off notice overlay, and title-bar Terminal button.
+//! Bottom terminal drawer view managing multiple [`TerminalSession`] tabs, shell picker,
+//! responsive header, exited-session restart, and missing-shell fallback.
+
+mod view;
 
 use std::cell::Cell;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gpui_kit::base::TestSupportExt;
-use gpui_kit::{
-    FocusHandle, KeyDownEvent, Keystroke, MouseButton, RenderOnce, Role, Subscription, Task, canvas,
-};
+use gpui_kit::{FocusHandle, KeyDownEvent, Keystroke, Subscription, Task};
+use navo_term::grid::DEFAULT_SCROLLBACK;
+use navo_term::{ShellSpec, Size};
 
-use super::grid::{GridStyle, TerminalGrid};
-use super::input::{encode_key, encode_paste};
-use super::session::TerminalSession;
-use super::{RowCache, grid_dimensions, measure_cell};
+use super::RowCache;
+use super::input::{encode_key, encode_paste, is_toggle_shortcut};
+use super::session::{
+    SessionSpawner, SessionState, SpawnOptions, TerminalSession, real_spawner,
+    spawn_default_session, spawn_specific_session,
+};
+pub use super::states::{TerminalOffNotice, title_bar_terminal_button};
 use crate::prelude::*;
-use crate::primitives::{Button, ButtonVariant, IconButton, IconName, Tooltip, icon};
-use crate::tokens;
+use crate::primitives::popup_menu::{self, PopupMenu};
 
 /// Default bottom drawer height as a percentage of the window height.
 pub const DEFAULT_DRAWER_HEIGHT_PCT: u16 = 40;
@@ -26,44 +31,117 @@ pub const CONTEXT: &str = "Terminal";
 
 /// Debounce delay before sending a PTY resize after layout bounds settle (R4).
 const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
-const HEADER_ICON_SIZE: f32 = 14.0;
-const NOTICE_ICON_SIZE: f32 = 18.0;
-const NOTICE_MAX_WIDTH: f32 = 440.0;
+
+gpui_kit::actions!(
+    terminal,
+    [
+        NewSession,
+        OpenShellPicker,
+        CloseSession,
+        NextSession,
+        PreviousSession
+    ]
+);
+
+/// Registers built-in keybindings for the `terminal` action namespace.
+pub(crate) fn bind_keys(cx: &mut App) {
+    crate::commands::bind_namespace(cx, "terminal");
+}
 
 type Callback = Rc<dyn Fn(&mut Window, &mut App)>;
+type CwdProvider = Rc<dyn Fn(&App) -> PathBuf>;
 
-/// Bottom terminal drawer view bound to one [`TerminalSession`] entity (D161.3).
-pub struct TerminalDrawer {
-    session: Entity<TerminalSession>,
+/// Configuration for building a multi-session [`TerminalDrawer`].
+pub struct TerminalDrawerConfig {
+    pub initial_session: Entity<TerminalSession>,
+    pub detected_shells: Vec<ShellSpec>,
+    pub configured_shell: SharedString,
+    pub scrollback: usize,
+    pub spawner: SessionSpawner,
+    pub cwd_provider: CwdProvider,
+    pub on_hide: Callback,
+    pub on_empty: Callback,
+}
+
+struct SessionEntry {
+    entity: Entity<TerminalSession>,
     cache: Entity<RowCache>,
+    _sub: Subscription,
+}
+
+/// Bottom terminal drawer view managing one or more [`TerminalSession`] entities (D161.3).
+pub struct TerminalDrawer {
+    sessions: Vec<SessionEntry>,
+    active: usize,
+    detected_shells: Vec<ShellSpec>,
+    configured_shell: SharedString,
+    scrollback: usize,
+    spawner: SessionSpawner,
+    cwd_provider: CwdProvider,
+    shell_picker: Entity<PopupMenu>,
+    tabs_menu: Entity<PopupMenu>,
+    _picker_sub: Subscription,
+    _tabs_menu_sub: Subscription,
     focus: FocusHandle,
+    measured_width: Rc<Cell<Option<Pixels>>>,
     measured_dims: Rc<Cell<(u16, u16)>>,
     pending_dims: (u16, u16),
     resize_task: Option<Task<()>>,
-    on_hide: Option<Callback>,
-    _session_sub: Subscription,
+    on_hide: Callback,
+    on_empty: Callback,
 }
 
 impl TerminalDrawer {
-    /// Creates a drawer view observing `session`.
+    /// Creates a drawer view observing a single `session` with default configuration.
     pub fn new(
         session: Entity<TerminalSession>,
         on_hide: impl Fn(&mut Window, &mut App) + 'static,
         cx: &mut Context<Self>,
     ) -> Self {
-        let initial = session.read(cx).size();
-        let cache = cx.new(|_| RowCache::new());
+        let on_hide: Callback = Rc::new(on_hide);
+        let on_empty = Rc::clone(&on_hide);
+        let detected_shells = session.read(cx).shell().cloned().into_iter().collect();
+        let config = TerminalDrawerConfig {
+            initial_session: session,
+            detected_shells,
+            configured_shell: SharedString::default(),
+            scrollback: DEFAULT_SCROLLBACK,
+            spawner: real_spawner(),
+            cwd_provider: Rc::new(|_| PathBuf::new()),
+            on_hide,
+            on_empty,
+        };
+        Self::with_config(config, cx)
+    }
+
+    /// Creates a multi-session drawer view wired to shell detection, spawner, and callbacks.
+    pub fn with_config(config: TerminalDrawerConfig, cx: &mut Context<Self>) -> Self {
+        let initial = config.initial_session.read(cx).size();
         let focus = cx.focus_handle();
-        let session_sub = cx.observe(&session, |_, _, cx| cx.notify());
+        let shell_picker = cx.new(|cx| PopupMenu::new(cx));
+        let tabs_menu = cx.new(|cx| PopupMenu::new(cx));
+        let picker_sub = cx.observe(&shell_picker, |_, _, cx| cx.notify());
+        let tabs_menu_sub = cx.observe(&tabs_menu, |_, _, cx| cx.notify());
+        let first = make_entry(config.initial_session, cx);
         Self {
-            session,
-            cache,
+            sessions: vec![first],
+            active: 0,
+            detected_shells: config.detected_shells,
+            configured_shell: config.configured_shell,
+            scrollback: config.scrollback,
+            spawner: config.spawner,
+            cwd_provider: config.cwd_provider,
+            shell_picker,
+            tabs_menu,
+            _picker_sub: picker_sub,
+            _tabs_menu_sub: tabs_menu_sub,
             focus,
+            measured_width: Rc::new(Cell::new(None)),
             measured_dims: Rc::new(Cell::new((initial.cols, initial.rows))),
             pending_dims: (initial.cols, initial.rows),
             resize_task: None,
-            on_hide: Some(Rc::new(on_hide)),
-            _session_sub: session_sub,
+            on_hide: config.on_hide,
+            on_empty: config.on_empty,
         }
     }
 
@@ -77,33 +155,248 @@ impl TerminalDrawer {
         self.focus.is_focused(window)
     }
 
-    fn handle_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if is_paste_shortcut(&event.keystroke) {
-            self.paste_clipboard(cx);
-            cx.stop_propagation();
-            return;
-        }
-        let modes = self.session.read(cx).modes();
-        if let Some(bytes) = encode_key(&event.keystroke, modes) {
-            self.session.update(cx, |session, _| {
-                let _ = session.send_bytes(&bytes);
-            });
-            cx.stop_propagation();
+    /// Number of open sessions in this drawer.
+    pub fn session_count(&self) -> usize {
+        self.sessions.len()
+    }
+
+    /// Index of the currently active session tab.
+    pub fn active_index(&self) -> usize {
+        self.active
+    }
+
+    /// Currently active [`TerminalSession`] entity, if any.
+    pub fn active_session(&self) -> Option<Entity<TerminalSession>> {
+        self.sessions.get(self.active).map(|e| e.entity.clone())
+    }
+
+    /// Updates the configured default shell string (without mutating existing sessions).
+    pub fn set_configured_shell(&mut self, shell: SharedString, cx: &mut Context<Self>) {
+        if self.configured_shell != shell {
+            self.configured_shell = shell;
+            cx.notify();
         }
     }
 
-    fn paste_clipboard(&mut self, cx: &mut Context<Self>) {
+    /// Shuts down every open session cleanly without blocking the UI thread.
+    pub fn shutdown_all(&mut self, cx: &mut App) {
+        for entry in self.sessions.drain(..) {
+            entry.entity.update(cx, |session, _| session.shutdown());
+        }
+        self.active = 0;
+    }
+
+    /// Spawns a new session with the configured (or first detected) shell and activates it.
+    pub fn new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let options = self.spawn_options(cx);
+        let entity =
+            spawn_default_session(&self.configured_shell, &self.detected_shells, &options, cx);
+        self.push_session(entity, window, cx);
+    }
+
+    /// Spawns a new session using an explicitly picked [`ShellSpec`] and activates it.
+    pub fn new_session_with_shell(
+        &mut self,
+        shell: ShellSpec,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let options = self.spawn_options(cx);
+        let fallback = self
+            .detected_shells
+            .iter()
+            .find(|candidate| candidate.program != shell.program)
+            .cloned();
+        let entity = spawn_specific_session(shell, fallback, &options, cx);
+        self.push_session(entity, window, cx);
+    }
+
+    fn spawn_options(&self, cx: &App) -> SpawnOptions {
+        SpawnOptions {
+            cwd: (self.cwd_provider)(cx),
+            size: current_size(&self.measured_dims),
+            scrollback: self.scrollback,
+            spawner: Rc::clone(&self.spawner),
+        }
+    }
+
+    /// Opens the shell picker popup menu if at least one shell was detected.
+    pub fn open_shell_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.detected_shells.is_empty() {
+            return;
+        }
+        popup_menu::open(&self.shell_picker, window, cx);
+        cx.notify();
+    }
+
+    /// Activates session tab `index` and focuses the terminal surface.
+    pub fn select_session(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index >= self.sessions.len() {
+            return;
+        }
+        self.active = index;
+        self.apply_current_dims_to_active(cx);
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    /// Cycles forward to the next session tab.
+    pub fn next_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.sessions.len() <= 1 {
+            return;
+        }
+        let next = (self.active + 1) % self.sessions.len();
+        self.select_session(next, window, cx);
+    }
+
+    /// Cycles backward to the previous session tab.
+    pub fn previous_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let len = self.sessions.len();
+        if len <= 1 {
+            return;
+        }
+        let prev = (self.active + len - 1) % len;
+        self.select_session(prev, window, cx);
+    }
+
+    /// Closes session `index`; invokes `on_empty` if it was the last session.
+    pub fn close_session_at(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index >= self.sessions.len() {
+            return;
+        }
+        let removed = self.sessions.remove(index);
+        removed.entity.update(cx, |session, _| session.shutdown());
+        if self.sessions.is_empty() {
+            self.active = 0;
+            let on_empty = Rc::clone(&self.on_empty);
+            on_empty(window, cx);
+            cx.notify();
+            return;
+        }
+        if index < self.active || self.active >= self.sessions.len() {
+            self.active = self.active.saturating_sub(1).min(self.sessions.len() - 1);
+        }
+        self.apply_current_dims_to_active(cx);
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    /// Restarts the active exited session in its original folder while keeping scrollback.
+    pub fn restart_active(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(entry) = self.sessions.get(self.active) else {
+            return;
+        };
+        let spawner = Rc::clone(&self.spawner);
+        let entity = entry.entity.clone();
+        let _ = entity.update(cx, |session, cx| session.restart(&spawner, cx));
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    /// Starts the fallback shell offered by the active missing-shell session without mutating
+    /// any saved setting.
+    pub fn start_fallback_active(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(entry) = self.sessions.get(self.active) else {
+            return;
+        };
+        let SessionState::MissingShell(info) = entry.entity.read(cx).state() else {
+            return;
+        };
+        let Some(fallback) = info.fallback else {
+            return;
+        };
+        let spawner = Rc::clone(&self.spawner);
+        let entity = entry.entity.clone();
+        let _ = entity.update(cx, |session, cx| {
+            session.launch_fallback(fallback, &spawner, cx)
+        });
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    fn push_session(
+        &mut self,
+        entity: Entity<TerminalSession>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let entry = make_entry(entity, cx);
+        self.sessions.push(entry);
+        self.active = self.sessions.len() - 1;
+        self.apply_current_dims_to_active(cx);
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    fn apply_current_dims_to_active(&self, cx: &mut Context<Self>) {
+        let dims = self.measured_dims.get();
+        if dims.0 == 0 || dims.1 == 0 {
+            return;
+        }
+        if let Some(entry) = self.sessions.get(self.active) {
+            entry
+                .entity
+                .update(cx, |session, cx| apply_resize(session, dims, cx));
+        }
+    }
+
+    fn handle_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if is_session_shortcut(&event.keystroke) || is_toggle_shortcut(&event.keystroke) {
+            return;
+        }
+        let Some(active) = self.active_session() else {
+            return;
+        };
+        match active.read(cx).state() {
+            SessionState::MissingShell(_) => {
+                if is_plain_enter(&event.keystroke) {
+                    self.start_fallback_active(window, cx);
+                    cx.stop_propagation();
+                }
+            }
+            SessionState::Exited(_) => {
+                if is_plain_enter(&event.keystroke) {
+                    self.restart_active(window, cx);
+                    cx.stop_propagation();
+                }
+            }
+            SessionState::Running => self.handle_running_key(&active, event, cx),
+        }
+    }
+
+    fn handle_running_key(
+        &self,
+        active: &Entity<TerminalSession>,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if is_paste_shortcut(&event.keystroke) {
+            self.paste_clipboard(active, cx);
+            cx.stop_propagation();
+            return;
+        }
+        let modes = active.read(cx).modes();
+        let Some(bytes) = encode_key(&event.keystroke, modes) else {
+            return;
+        };
+        active.update(cx, |session, _| {
+            let _ = session.send_bytes(&bytes);
+        });
+        cx.stop_propagation();
+    }
+
+    fn paste_clipboard(&self, active: &Entity<TerminalSession>, cx: &mut Context<Self>) {
         let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
             return;
         };
-        let modes = self.session.read(cx).modes();
+        let modes = active.read(cx).modes();
         let bytes = encode_paste(&text, modes);
-        self.session.update(cx, |session, _| {
+        active.update(cx, |session, _| {
             let _ = session.send_bytes(&bytes);
         });
     }
@@ -114,130 +407,31 @@ impl TerminalDrawer {
             return;
         }
         self.pending_dims = dims;
-        let session = self.session.clone();
+        let Some(session) = self.active_session() else {
+            return;
+        };
         self.resize_task = Some(cx.spawn(async move |_, cx| {
             cx.background_executor().timer(RESIZE_DEBOUNCE).await;
             session.update(cx, |session, cx| apply_resize(session, dims, cx));
         }));
     }
+}
 
-    fn header(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = tokens::current(cx);
-        let label = self.session.read(cx).label().clone();
-        let hide_label = SharedString::from(navo_l10n::tr("terminal-drawer-hide"));
-        let on_hide = self.on_hide.clone();
-        div()
-            .id("terminal-drawer-header")
-            .flex()
-            .flex_none()
-            .items_center()
-            .justify_between()
-            .h(px(tokens::HEADER_HEIGHT))
-            .px(t.spacing.sm)
-            .bg(t.colors.background)
-            .border_b_1()
-            .border_color(t.colors.line)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(t.spacing.xs)
-                    .min_w_0()
-                    .child(icon(
-                        IconName::SquareTerminal,
-                        px(HEADER_ICON_SIZE),
-                        t.colors.accent_text,
-                    ))
-                    .child(
-                        div()
-                            .text_size(t.typography.small)
-                            .text_color(t.colors.text)
-                            .truncate()
-                            .child(label),
-                    ),
-            )
-            .child(
-                IconButton::new("terminal-drawer-hide", IconName::ChevronDown, hide_label)
-                    .on_click(move |_, window, cx| {
-                        if let Some(hide) = &on_hide {
-                            hide(window, cx);
-                        }
-                    }),
-            )
-    }
-
-    fn grid_body(&self, mono_font: SharedString, cx: &mut Context<Self>) -> impl IntoElement {
-        let snapshot = self.session.read(cx).snapshot();
-        let style = GridStyle::default();
-        let measured = Rc::clone(&self.measured_dims);
-        let weak = cx.weak_entity();
-        let font_family = style.font_family.clone().unwrap_or(mono_font);
-        let font_size = style.font_size;
-        let line_height = style.line_height;
-        let pad = style.padding;
-        div()
-            .relative()
-            .flex_1()
-            .min_h_0()
-            .w_full()
-            .child(TerminalGrid::new(snapshot, self.cache.clone()).style(style))
-            .child(
-                canvas(
-                    move |bounds, window, cx| {
-                        let metrics = measure_cell(window, &font_family, font_size, line_height);
-                        let inner_w = (bounds.size.width - pad * 2.0).max(px(0.0));
-                        let inner_h = (bounds.size.height - pad * 2.0).max(px(0.0));
-                        let dims = grid_dimensions(inner_w, inner_h, metrics.width, metrics.height);
-                        if dims.0 == 0 || dims.1 == 0 || measured.get() == dims {
-                            return;
-                        }
-                        measured.set(dims);
-                        let weak = weak.clone();
-                        cx.defer(move |cx| {
-                            let _ = weak.update(cx, |drawer, cx| drawer.sync_measured_size(cx));
-                        });
-                    },
-                    |_, (), _, _| {},
-                )
-                .absolute()
-                .size_full(),
-            )
+fn make_entry(entity: Entity<TerminalSession>, cx: &mut Context<TerminalDrawer>) -> SessionEntry {
+    let cache = cx.new(|_| RowCache::new());
+    let sub = cx.observe(&entity, |_, _, cx| cx.notify());
+    SessionEntry {
+        entity,
+        cache,
+        _sub: sub,
     }
 }
 
-impl Render for TerminalDrawer {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = tokens::current(cx).clone();
-        let border = if self.focus.is_focused(window) {
-            t.colors.accent
-        } else {
-            t.colors.line
-        };
-        div()
-            .id("terminal-drawer")
-            .test_support()
-            .aria_label(navo_l10n::tr("terminal-drawer-label"))
-            .key_context(CONTEXT)
-            .track_focus(&self.focus)
-            .flex()
-            .flex_col()
-            .size_full()
-            .min_h_0()
-            .bg(t.terminal.background)
-            .border_1()
-            .border_color(border)
-            .rounded(t.radii.card)
-            .overflow_hidden()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _, window, cx| {
-                    window.focus(&this.focus, cx);
-                    cx.notify();
-                }),
-            )
-            .on_key_down(cx.listener(Self::handle_key_down))
-            .child(self.header(cx))
-            .child(self.grid_body(t.typography.mono_font.clone(), cx))
+fn current_size(measured: &Rc<Cell<(u16, u16)>>) -> Size {
+    let (cols, rows) = measured.get();
+    Size {
+        cols: if cols == 0 { 80 } else { cols },
+        rows: if rows == 0 { 24 } else { rows },
     }
 }
 
@@ -256,143 +450,21 @@ fn is_paste_shortcut(keystroke: &Keystroke) -> bool {
     keystroke.key.eq_ignore_ascii_case("v") && m.control && m.shift && !m.alt && !m.platform
 }
 
-/// Notice shown when the user presses `Ctrl+\`` while `[modules] terminal` is off.
-#[derive(IntoElement)]
-pub struct TerminalOffNotice {
-    on_turn_on: Callback,
-    on_external: Callback,
-    on_dismiss: Callback,
+fn is_plain_enter(keystroke: &Keystroke) -> bool {
+    let m = keystroke.modifiers;
+    keystroke.key == "enter" && !m.control && !m.alt && !m.shift && !m.platform
 }
 
-impl TerminalOffNotice {
-    /// Builds the module-off notice with callbacks for Turn on…, External terminal, and Dismiss.
-    pub fn new(
-        on_turn_on: impl Fn(&mut Window, &mut App) + 'static,
-        on_external: impl Fn(&mut Window, &mut App) + 'static,
-        on_dismiss: impl Fn(&mut Window, &mut App) + 'static,
-    ) -> Self {
-        Self {
-            on_turn_on: Rc::new(on_turn_on),
-            on_external: Rc::new(on_external),
-            on_dismiss: Rc::new(on_dismiss),
-        }
+fn is_session_shortcut(keystroke: &Keystroke) -> bool {
+    let m = keystroke.modifiers;
+    if !m.control || m.alt || m.platform {
+        return false;
     }
-}
-
-fn notice_actions(t: &tokens::Theme, on_turn_on: Callback, on_external: Callback) -> Div {
-    let turn_on_label = SharedString::from(navo_l10n::tr("terminal-off-turn-on"));
-    let external_label = SharedString::from(navo_l10n::tr("cmd-files-open-terminal"));
-    div()
-        .flex()
-        .flex_wrap()
-        .items_center()
-        .gap(t.spacing.sm)
-        .pt(t.spacing.xs)
-        .child(
-            Button::new("terminal-off-turn-on", turn_on_label)
-                .variant(ButtonVariant::Primary)
-                .on_click(move |_, window, cx| on_turn_on(window, cx)),
-        )
-        .child(
-            Button::new("terminal-off-external", external_label)
-                .variant(ButtonVariant::Secondary)
-                .on_click(move |_, window, cx| on_external(window, cx)),
-        )
-}
-
-impl RenderOnce for TerminalOffNotice {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let t = tokens::current(cx);
-        let title = SharedString::from(navo_l10n::tr("terminal-off-title"));
-        let body = SharedString::from(navo_l10n::tr("terminal-off-body"));
-        let dismiss_label = SharedString::from(navo_l10n::tr("terminal-off-dismiss"));
-        let on_dismiss = self.on_dismiss;
-
-        div()
-            .id("terminal-off-notice")
-            .role(Role::Status)
-            .aria_label(title.clone())
-            .test_support()
-            .flex()
-            .items_start()
-            .gap(t.spacing.md)
-            .max_w(px(NOTICE_MAX_WIDTH))
-            .p(t.spacing.md)
-            .bg(t.surfaces.sheet)
-            .border_1()
-            .border_color(t.colors.line)
-            .rounded(t.radii.sheet)
-            .shadow(t.shadows.menu.clone())
-            .child(div().pt(t.spacing.xxs).flex_none().child(icon(
-                IconName::SquareTerminal,
-                px(NOTICE_ICON_SIZE),
-                t.colors.accent_text,
-            )))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
-                    .gap(t.spacing.xs)
-                    .child(
-                        div()
-                            .text_size(t.typography.body)
-                            .text_color(t.colors.text)
-                            .child(title),
-                    )
-                    .child(
-                        div()
-                            .text_size(t.typography.small)
-                            .text_color(t.colors.muted)
-                            .child(body),
-                    )
-                    .child(notice_actions(t, self.on_turn_on, self.on_external)),
-            )
-            .child(
-                IconButton::new("terminal-off-dismiss", IconName::Close, dismiss_label)
-                    .on_click(move |_, window, cx| on_dismiss(window, cx)),
-            )
+    if keystroke.key == "tab" {
+        return true;
     }
-}
-
-/// Builds the title-bar Terminal toggle button shown while `[modules] terminal` is on.
-pub fn title_bar_terminal_button(
-    is_open: bool,
-    on_click: impl Fn(&mut Window, &mut App) + 'static,
-    cx: &App,
-) -> impl IntoElement {
-    let t = tokens::current(cx);
-    let label = SharedString::from(navo_l10n::tr("terminal-title-button"));
-    let tip = SharedString::from(navo_l10n::tr("terminal-title-button-tip"));
-    let active_bg = t.colors.selection;
-    let active_fg = t.colors.accent_text;
-    let rest_fg = t.colors.text;
-    let hover_bg = t.colors.hover;
-
-    div()
-        .id("title-terminal-button")
-        .role(Role::Button)
-        .aria_label(label.clone())
-        .test_support()
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap(t.spacing.xs)
-        .px(t.spacing.sm)
-        .h(t.spacing.button_size)
-        .rounded(t.radii.md)
-        .text_size(t.typography.small)
-        .text_color(if is_open { active_fg } else { rest_fg })
-        .when(is_open, |el| el.bg(active_bg))
-        .cursor_pointer()
-        .hover(move |el| el.bg(hover_bg))
-        .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
-        .on_click(move |_, window, cx| on_click(window, cx))
-        .child(icon(
-            IconName::SquareTerminal,
-            px(HEADER_ICON_SIZE),
-            if is_open { active_fg } else { t.colors.muted },
-        ))
-        .child(label)
+    m.shift
+        && (keystroke.key.eq_ignore_ascii_case("t")
+            || keystroke.key.eq_ignore_ascii_case("w")
+            || keystroke.key == "space")
 }

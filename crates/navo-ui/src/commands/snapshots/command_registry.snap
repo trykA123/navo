@@ -530,6 +530,11 @@ button_bar_editor.duplicate | Duplicate button | ButtonBarEditor
 button_bar_editor.undo | Undo button bar edit | ButtonBarEditor
 button_bar_editor.done | Close button bar editor | ButtonBarEditor
 terminal.toggle | Toggle terminal | global
+terminal.new_session | New terminal session | Terminal
+terminal.open_shell_picker | New session with shell… | Terminal
+terminal.close_session | Close terminal session | Terminal
+terminal.next_session | Next terminal session | Terminal
+terminal.previous_session | Previous terminal session | Terminal
 find_results.focus | Go to find results | global
 find_results.up | Up | FindResults
 find_results.down | Down | FindResults

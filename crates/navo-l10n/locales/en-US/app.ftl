@@ -142,6 +142,7 @@ crash-notice-save = Save report
 crash-notice-dismiss = Dismiss
 command-center-context-viewer = Viewer
 command-center-context-compare = Compare
+command-center-context-terminal = Terminal
 command-center-context-multi-rename = Multi-rename
 command-center-context-settings = Settings
 command-center-folder = Folder

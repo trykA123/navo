@@ -267,6 +267,12 @@ impl Grid {
         self.lock().exit
     }
 
+    /// Clears a recorded exit status before restarting a shell in the same grid.
+    pub fn clear_exit(&self) {
+        self.lock().exit = None;
+        self.mark_dirty();
+    }
+
     /// Clears the dirty flag and reads the visible rows at `viewport`. Damage is taken: the
     /// next snapshot reports only rows changed after this one.
     pub fn snapshot(&self, viewport: Viewport) -> Snapshot {

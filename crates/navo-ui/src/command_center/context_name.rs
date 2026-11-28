@@ -21,6 +21,7 @@ fn key_of(context: &str) -> Option<&'static str> {
         "CrashNotice" => "command-center-context-crash-notice",
         "Shortcuts" => "command-center-context-shortcuts",
         "Compare" | "CompareView" | "CompareStream" => "command-center-context-compare",
+        "Terminal" => "command-center-context-terminal",
         _ if is_within(context, "Viewer") => "command-center-context-viewer",
         _ if is_within(context, "MultiRename") => "command-center-context-multi-rename",
         _ if is_within(context, "SettingsSheet") => "command-center-context-settings",

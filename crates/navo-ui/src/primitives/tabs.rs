@@ -1,57 +1,29 @@
 use std::rc::Rc;
 
-use gpui_kit::assets::IconName;
-use gpui_kit::base::{Tab as BaseTab, TestSupportExt};
-use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::base::TestSupportExt;
 use gpui_kit::{
-    AnyElement, App, Bounds, ElementId, Entity, FontWeight, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, Pixels, Point, RenderOnce, Role, SharedString,
-    StatefulInteractiveElement, Styled, Window, canvas, div, px,
+    AnyElement, App, Bounds, ElementId, Entity, InteractiveElement, IntoElement, ParentElement,
+    Pixels, Point, RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled, Window, div,
+    px,
 };
 
 mod more;
 mod plan;
+mod tab;
 
 use super::fit::Fit;
 use super::popup_menu::{PopupMenu, note_items, popup_state};
-use super::{Tooltip, icon};
 use crate::drag::Landing;
 use crate::file_list::DropPayload;
-use crate::file_list::row::inset_ring;
 use crate::tokens::{self, Theme};
 use more::{Hidden, more_tabs};
 use plan::{Budget, MIN_PINNED_TAB, plan};
+pub use tab::{TAB_STATUS_SIZE, Tab, TabStatus};
+use tab::{TabProps, render_tab, status_slot};
 
 type SelectHandler = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
 type MenuHandler = Rc<dyn Fn(usize, Point<Pixels>, &mut Window, &mut App)>;
 type BoundsHandler = Rc<dyn Fn(usize, Bounds<Pixels>, &mut Window, &mut App)>;
-
-#[derive(Clone)]
-pub struct Tab {
-    label: SharedString,
-    icon: Option<IconName>,
-    pinned: bool,
-}
-
-impl Tab {
-    pub fn new(label: impl Into<SharedString>) -> Self {
-        Self {
-            label: label.into(),
-            icon: None,
-            pinned: false,
-        }
-    }
-
-    pub fn pinned(mut self, pinned: bool) -> Self {
-        self.pinned = pinned;
-        self
-    }
-
-    pub fn icon(mut self, icon: IconName) -> Self {
-        self.icon = Some(icon);
-        self
-    }
-}
 
 #[derive(IntoElement)]
 pub struct Tabs {
@@ -59,6 +31,7 @@ pub struct Tabs {
     tabs: Vec<Tab>,
     selected: usize,
     is_highlighted: bool,
+    aria_label: Option<SharedString>,
     on_select: Option<SelectHandler>,
     on_close: Option<SelectHandler>,
     on_bounds: Option<BoundsHandler>,
@@ -76,6 +49,7 @@ impl Tabs {
             tabs: tabs.into_iter().collect(),
             selected: 0,
             is_highlighted: false,
+            aria_label: None,
             on_select: None,
             on_close: None,
             on_bounds: None,
@@ -94,6 +68,11 @@ impl Tabs {
 
     pub fn bar_theme(mut self, theme: Theme) -> Self {
         self.bar = Some(theme);
+        self
+    }
+
+    pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.aria_label = Some(label.into());
         self
     }
 
@@ -150,136 +129,6 @@ impl Tabs {
     ) -> Self {
         self.landing.on_hover(handler);
         self
-    }
-}
-
-struct TabProps<'a> {
-    theme: &'a Theme,
-    index: usize,
-    count: usize,
-    is_selected: bool,
-    is_highlighted: bool,
-    min_width: Pixels,
-    on_select: Option<SelectHandler>,
-    on_close: Option<SelectHandler>,
-    on_bounds: Option<BoundsHandler>,
-    on_menu: Option<MenuHandler>,
-    landing: Landing<usize>,
-}
-
-fn measured(base: BaseTab, handler: Option<BoundsHandler>, index: usize) -> BaseTab {
-    let Some(handler) = handler else {
-        return base;
-    };
-    base.relative().child(
-        canvas(
-            move |bounds, window, cx| handler(index, bounds, window, cx),
-            |_, (), _, _| {},
-        )
-        .absolute()
-        .size_full(),
-    )
-}
-
-fn close_button(t: &Theme, index: usize, is_selected: bool, handler: SelectHandler) -> AnyElement {
-    let group = SharedString::from(format!("tab-{index}"));
-    let hover = t.colors.hover;
-    div()
-        .id(("tab-close", index))
-        .role(Role::Button)
-        .aria_label(navo_l10n::tr("tabs-close"))
-        .test_support()
-        .flex()
-        .flex_none()
-        .items_center()
-        .justify_center()
-        .size(t.spacing.icon + t.spacing.xs)
-        .rounded(t.radii.pill)
-        .cursor_pointer()
-        .when(!is_selected, |close| {
-            close
-                .opacity(0.)
-                .group_hover(group, |style| style.opacity(1.))
-        })
-        .hover(move |style| style.bg(hover))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        .on_click(move |_, window, cx| handler(&index, window, cx))
-        .child(icon(IconName::X, t.spacing.icon - px(3.), t.colors.muted))
-        .into_any_element()
-}
-
-fn closable(
-    base: BaseTab,
-    (t, index, is_selected): (&Theme, usize, bool),
-    close: SelectHandler,
-) -> BaseTab {
-    let middle = close.clone();
-    base.group(format!("tab-{index}"))
-        .child(close_button(t, index, is_selected, close))
-        .on_mouse_down(MouseButton::Middle, move |_, window, cx| {
-            middle(&index, window, cx);
-        })
-}
-
-fn render_tab(tab: Tab, props: TabProps) -> BaseTab {
-    let theme = props
-        .theme
-        .selected_content(props.is_selected && props.is_highlighted);
-    let t = &theme;
-    let index = props.index;
-    let c = &t.colors;
-    let color = if props.is_selected { c.text } else { c.muted };
-    let base = BaseTab::new(index)
-        .selected(props.is_selected)
-        .set_position(index + 1, props.count)
-        .accessibility_label(tab.label.clone())
-        .gap(t.spacing.sm)
-        .h(t.spacing.tab_height)
-        .px(t.spacing.lg)
-        .flex_shrink(1.)
-        .min_w(props.min_width)
-        .overflow_hidden()
-        .rounded(t.radii.pill)
-        .text_color(color)
-        .when_some(tab.icon, |base, name| {
-            base.child(icon(name, t.spacing.icon - px(1.), color))
-        })
-        .child(
-            div()
-                .min_w_0()
-                .when(tab.pinned, |d| d.max_w(t.spacing.pinned_tab_label))
-                .truncate()
-                .child(tab.label),
-        )
-        .when_some(
-            props.on_close.clone().filter(|_| !tab.pinned),
-            |base, handler| closable(base, (t, index, props.is_selected), handler),
-        )
-        .when(index < 8, |base| {
-            base.tooltip(move |window, cx| {
-                Tooltip::new(format!("Ctrl+{}", index + 1)).build(window, cx)
-            })
-        })
-        .when_some(props.on_menu, |base, handler| {
-            base.on_mouse_up(MouseButton::Right, move |event, window, cx| {
-                cx.stop_propagation();
-                handler(index, event.position, window, cx);
-            })
-        })
-        .when_some(props.on_select, |base, handler| {
-            base.on_click(move |_, window, cx| handler(&index, window, cx))
-        });
-    let base = measured(base, props.on_bounds, index);
-    let base = props.landing.accept(base, (index, c.accent));
-    match (props.is_selected, props.is_highlighted) {
-        (false, _) => base.hover(|style| style.bg(c.hover)),
-        (true, true) => base
-            .font_weight(FontWeight::SEMIBOLD)
-            .bg(t.surfaces.current),
-        (true, false) => base
-            .font_weight(FontWeight::SEMIBOLD)
-            .bg(t.surfaces.field)
-            .shadow(inset_ring(t.surfaces.card_edge)),
     }
 }
 
@@ -379,6 +228,9 @@ impl RenderOnce for Tabs {
             Some(menu) => menu,
             None => popup_state((self.id.clone(), "more"), window, cx),
         };
+        let label = self
+            .aria_label
+            .unwrap_or_else(|| SharedString::from(navo_l10n::tr("tabs-label")));
         let row = Row {
             tabs: self.tabs,
             selected: self.selected,
@@ -395,7 +247,7 @@ impl RenderOnce for Tabs {
         div()
             .id(self.id)
             .role(Role::TabList)
-            .aria_label(navo_l10n::tr("tabs-label"))
+            .aria_label(label)
             .test_support()
             .flex_1()
             .min_w_0()

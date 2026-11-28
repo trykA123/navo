@@ -1,29 +1,30 @@
 //! External terminal launcher and built-in terminal drawer host owned by [`NavoWindow`].
 
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use navo_core::{Location, PaneId};
-use navo_term::Size;
-#[cfg(not(test))]
 use navo_term::grid::DEFAULT_SCROLLBACK;
 #[cfg(not(test))]
 use navo_term::shells::{Probe, detect};
+use navo_term::{ShellSpec, Size};
 
 use super::NavoWindow;
 use crate::prelude::*;
 use crate::primitives::{Splitter, SplitterState};
 use crate::settings::{Change, Field, Value, Values};
 use crate::terminal::{
-    DEFAULT_DRAWER_HEIGHT_PCT, MIN_DRAWER_HEIGHT, TerminalDrawer, TerminalOffNotice,
-    TerminalSession, title_bar_terminal_button,
+    DEFAULT_DRAWER_HEIGHT_PCT, MIN_DRAWER_HEIGHT, SessionSpawner, SpawnOptions, TerminalDrawer,
+    TerminalDrawerConfig, TerminalOffNotice, TerminalSession, spawn_default_session,
+    title_bar_terminal_button,
 };
 use crate::tokens;
 
 type Open = Arc<dyn Fn(&Location) -> Result<(), String> + Send + Sync>;
 
 #[cfg(test)]
-type TestSpawner = std::rc::Rc<dyn Fn(Size, &mut Context<TerminalSession>) -> TerminalSession>;
+type TestSpawner = Rc<dyn Fn(Size, &mut Context<TerminalSession>) -> TerminalSession>;
 
 /// Initial cell grid before the first layout measurement refines it.
 const INITIAL_SIZE: Size = Size { cols: 80, rows: 24 };
@@ -43,16 +44,19 @@ impl TerminalHooks {
     }
 }
 
-/// Per-window built-in terminal state: owns the [`TerminalSession`] entity, drawer view,
-/// splitter state, visibility flag, and module-off notice state (D161.1, D161.3).
+/// Per-window built-in terminal state: owns the multi-session drawer view, splitter state,
+/// visibility flag, and module-off notice state (D161.1, D161.3).
 pub(super) struct TerminalHost {
-    session: Option<Entity<TerminalSession>>,
     drawer: Option<Entity<TerminalDrawer>>,
     splitter: Entity<SplitterState>,
     is_open: bool,
     off_notice: bool,
     #[cfg(test)]
     spawner: Option<TestSpawner>,
+    #[cfg(test)]
+    session_spawner: Option<SessionSpawner>,
+    #[cfg(test)]
+    detected_shells: Option<Vec<ShellSpec>>,
 }
 
 impl TerminalHost {
@@ -62,21 +66,23 @@ impl TerminalHost {
         let default_ratio = drawer_pct_to_ratio(DEFAULT_DRAWER_HEIGHT_PCT);
         let splitter = cx.new(|_| SplitterState::with_default(ratio, default_ratio));
         Self {
-            session: None,
             drawer: None,
             splitter,
             is_open: false,
             off_notice: false,
             #[cfg(test)]
             spawner: None,
+            #[cfg(test)]
+            session_spawner: None,
+            #[cfg(test)]
+            detected_shells: None,
         }
     }
 
     fn shutdown(&mut self, cx: &mut App) {
-        if let Some(session) = self.session.take() {
-            session.update(cx, |session, _| session.shutdown());
+        if let Some(drawer) = self.drawer.take() {
+            drawer.update(cx, |drawer, cx| drawer.shutdown_all(cx));
         }
-        self.drawer = None;
         self.is_open = false;
     }
 
@@ -162,9 +168,7 @@ impl NavoWindow {
     }
 
     fn show_and_focus_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.ensure_terminal_session(cx) {
-            return;
-        }
+        self.ensure_terminal_drawer(cx);
         self.terminal_host.is_open = true;
         self.focus_terminal_drawer(window, cx);
         self.cached.refresh_title(cx);
@@ -172,6 +176,14 @@ impl NavoWindow {
     }
 
     fn hide_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.terminal_host.is_open = false;
+        self.focus_core_pane(window, cx);
+        self.cached.refresh_title(cx);
+        cx.notify();
+    }
+
+    fn close_empty_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.terminal_host.drawer = None;
         self.terminal_host.is_open = false;
         self.focus_core_pane(window, cx);
         self.cached.refresh_title(cx);
@@ -193,61 +205,95 @@ impl NavoWindow {
             .is_some_and(|drawer| drawer.read(cx).is_focused(window))
     }
 
-    fn ensure_terminal_session(&mut self, cx: &mut Context<Self>) -> bool {
-        if self.terminal_host.session.is_some() && self.terminal_host.drawer.is_some() {
-            return true;
+    fn ensure_terminal_drawer(&mut self, cx: &mut Context<Self>) {
+        if self.terminal_host.drawer.is_some() {
+            return;
         }
-        let session = match self.spawn_initial_session(cx) {
-            Ok(session) => session,
-            Err(message) => {
-                let pane = self.browser.state().focused_pane();
-                self.report_pane_error(pane, message.into());
-                return false;
-            }
+        let detected_shells = self.detected_terminal_shells();
+        let configured_shell: SharedString = self.values.terminal_shell().to_owned().into();
+        let spawner = self.terminal_session_spawner();
+        let initial_session =
+            self.spawn_initial_session(&configured_shell, &detected_shells, &spawner, cx);
+        let owner_hide = cx.weak_entity();
+        let owner_empty = cx.weak_entity();
+        let owner_cwd = cx.weak_entity();
+        let config = TerminalDrawerConfig {
+            initial_session,
+            detected_shells,
+            configured_shell,
+            scrollback: DEFAULT_SCROLLBACK,
+            spawner,
+            cwd_provider: Rc::new(move |cx| {
+                owner_cwd
+                    .upgrade()
+                    .map(|view| view.read(cx).active_local_folder())
+                    .unwrap_or_default()
+            }),
+            on_hide: Rc::new(move |window, cx| {
+                let _ = owner_hide.update(cx, |view, cx| view.hide_terminal(window, cx));
+            }),
+            on_empty: Rc::new(move |window, cx| {
+                let _ = owner_empty.update(cx, |view, cx| view.close_empty_terminal(window, cx));
+            }),
         };
-        let owner = cx.weak_entity();
-        let drawer = cx.new(|cx| {
-            TerminalDrawer::new(
-                session.clone(),
-                move |window, cx| {
-                    let _ = owner.update(cx, |view, cx| view.hide_terminal(window, cx));
-                },
-                cx,
-            )
-        });
-        self.terminal_host.session = Some(session);
+        let drawer = cx.new(|cx| TerminalDrawer::with_config(config, cx));
         self.terminal_host.drawer = Some(drawer);
-        true
     }
 
     #[cfg(test)]
-    fn spawn_initial_session(
-        &self,
-        cx: &mut Context<Self>,
-    ) -> Result<Entity<TerminalSession>, String> {
-        let spawner = self.terminal_host.spawner.clone();
-        let session = cx.new(|cx| match spawner {
-            Some(make) => make(INITIAL_SIZE, cx),
-            None => TerminalSession::with_fake(INITIAL_SIZE, cx).0,
-        });
-        Ok(session)
+    fn detected_terminal_shells(&self) -> Vec<ShellSpec> {
+        if let Some(shells) = &self.terminal_host.detected_shells {
+            return shells.clone();
+        }
+        vec![ShellSpec {
+            kind: navo_term::ShellKind::Other,
+            program: PathBuf::from("fake-shell"),
+            args: Vec::new(),
+            label: String::from("Fake"),
+        }]
     }
 
     #[cfg(not(test))]
-    fn spawn_initial_session(
-        &self,
-        cx: &mut Context<Self>,
-    ) -> Result<Entity<TerminalSession>, String> {
-        let shells = detect(&Probe::system(Vec::new()));
-        let Some(shell) = shells.into_iter().next() else {
-            return Err(navo_l10n::tr("terminal-not-configured"));
-        };
-        let cwd = self.active_local_folder();
-        TerminalSession::spawn_entity(&shell, &cwd, INITIAL_SIZE, DEFAULT_SCROLLBACK, cx)
-            .map_err(|err| navo_l10n::t!("terminal-spawn-error", error = err.to_string()))
+    fn detected_terminal_shells(&self) -> Vec<ShellSpec> {
+        detect(&Probe::system(Vec::new()))
     }
 
-    #[allow(dead_code, reason = "used by real PTY spawning outside unit tests")]
+    #[cfg(test)]
+    fn terminal_session_spawner(&self) -> SessionSpawner {
+        if let Some(spawner) = &self.terminal_host.session_spawner {
+            return Rc::clone(spawner);
+        }
+        Rc::new(|_, _, _, sink| {
+            let (backend, _handle) = navo_term::FakeBackend::new(sink);
+            Ok(navo_term::Session::with_backend(Box::new(backend)))
+        })
+    }
+
+    #[cfg(not(test))]
+    fn terminal_session_spawner(&self) -> SessionSpawner {
+        crate::terminal::real_spawner()
+    }
+
+    fn spawn_initial_session(
+        &self,
+        configured: &str,
+        detected: &[ShellSpec],
+        spawner: &SessionSpawner,
+        cx: &mut Context<Self>,
+    ) -> Entity<TerminalSession> {
+        #[cfg(test)]
+        if let Some(make) = self.terminal_host.spawner.clone() {
+            return cx.new(|cx| make(INITIAL_SIZE, cx));
+        }
+        let options = SpawnOptions {
+            cwd: self.active_local_folder(),
+            size: INITIAL_SIZE,
+            scrollback: DEFAULT_SCROLLBACK,
+            spawner: Rc::clone(spawner),
+        };
+        spawn_default_session(configured, detected, &options, cx)
+    }
+
     fn active_local_folder(&self) -> PathBuf {
         let folder = self.browser.state().active_tab().location();
         if folder.is_local() {
@@ -369,12 +415,16 @@ impl NavoWindow {
         )
     }
 
-    /// Applies updated terminal module & drawer height settings from `self.values`.
+    /// Applies updated terminal module, shell, and drawer height settings from `self.values`.
     pub(super) fn sync_terminal_settings(&mut self, cx: &mut App) {
         if !self.values.terminal_module_on() {
             self.terminal_host.shutdown(cx);
         } else {
             self.terminal_host.off_notice = false;
+            if let Some(drawer) = &self.terminal_host.drawer {
+                let shell: SharedString = self.values.terminal_shell().to_owned().into();
+                drawer.update(cx, |drawer, cx| drawer.set_configured_shell(shell, cx));
+            }
         }
         self.terminal_host
             .sync_height(self.values.terminal_drawer_height(), cx);
@@ -387,8 +437,23 @@ impl NavoWindow {
     }
 
     #[cfg(test)]
+    pub(crate) fn set_terminal_session_spawner(&mut self, spawner: SessionSpawner) {
+        self.terminal_host.session_spawner = Some(spawner);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_terminal_detected_shells(&mut self, shells: Vec<ShellSpec>) {
+        self.terminal_host.detected_shells = Some(shells);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn terminal_configured_shell(&self) -> &str {
+        self.values.terminal_shell()
+    }
+
+    #[cfg(test)]
     pub(crate) fn has_terminal_session(&self) -> bool {
-        self.terminal_host.session.is_some()
+        self.terminal_host.drawer.is_some()
     }
 
     #[cfg(test)]

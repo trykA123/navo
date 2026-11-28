@@ -11,6 +11,7 @@ impl Field {
                 | Self::DarkTheme
                 | Self::ModuleTerminal
                 | Self::TerminalDrawerHeight
+                | Self::TerminalShell
                 | Self::AutomotiveMemoryStrip
                 | Self::AutomotiveCharts
                 | Self::AutomotiveRowBars

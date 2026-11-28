@@ -556,6 +556,11 @@ table.copy_row | ctrl-shift-c | Table
 table.first_cell | home | Table
 table.last_cell | end | Table
 table.sort_by_column | ctrl-f3 | Table
+terminal.close_session | ctrl-shift-w | Terminal
+terminal.new_session | ctrl-shift-t | Terminal
+terminal.next_session | ctrl-tab | Terminal
+terminal.open_shell_picker | ctrl-shift-space | Terminal
+terminal.previous_session | ctrl-shift-tab | Terminal
 terminal.toggle | ctrl-` | global
 trace.filter_backspace | backspace | CanTrace
 trace.filter_by_id | enter | CanTrace

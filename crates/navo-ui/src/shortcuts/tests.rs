@@ -149,6 +149,7 @@ fn a_key_search_takes_modifiers_in_any_order_and_spaces() {
     let tab = [
         "settings.previous_section",
         "tab.previous",
+        "terminal.previous_session",
         "find_results.previous_tab",
     ];
     assert_eq!(shown(&rows, "shift+ctrl+tab"), tab);
