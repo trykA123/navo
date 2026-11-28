@@ -3,6 +3,7 @@
 //! character alignment, and cursor rendering.
 
 mod cache;
+mod cursor;
 mod grid;
 mod palette;
 
@@ -21,7 +22,10 @@ use navo_term::grid::{Point as GridPoint, Selection};
 
 pub use cache::RowCache;
 pub use grid::{BlockKind, GridStyle, RowBlock, TerminalGrid};
-pub use palette::{BgRun, CellColors, coalesce_bg_runs, resolve_cell_colors};
+pub use palette::{
+    BgRun, CellColors, block_cursor_glyph_color, coalesce_bg_runs, resolve_cell_colors,
+    resolve_selected_fg,
+};
 
 /// Full period of the terminal cursor blink cycle (1.06 s, strictly under 1 Hz).
 pub const CURSOR_BLINK_PERIOD: Duration = Duration::from_millis(1060);

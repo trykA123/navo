@@ -1,6 +1,7 @@
 //! Per-row shaped-line cache for [`super::TerminalGrid`]: re-shapes only damaged rows or on
 //! font/size/theme/width invalidation.
 
+use std::ops::Range;
 use std::sync::{Arc, Weak};
 
 #[cfg(test)]
@@ -10,8 +11,8 @@ use gpui_kit::{
 };
 use navo_term::grid::{Cell, Snapshot, Width};
 
-use super::palette::{BgRun, coalesce_bg_runs, resolve_cell_colors};
-use super::terminal_font;
+use super::palette::{BgRun, coalesce_bg_runs, resolve_cell_colors, resolve_selected_fg};
+use super::{selection_columns, terminal_font};
 use crate::tokens::TerminalColors;
 
 /// Stroke thickness for SGR underline and strikeout decorations.
@@ -52,6 +53,7 @@ pub(super) struct CachedRow {
     pub line: Option<ShapedLine>,
     pub wide_glyphs: Vec<WideGlyph>,
     pub bg_runs: Vec<BgRun>,
+    pub selection: Option<Range<usize>>,
 }
 
 /// Style attributes merged across adjacent cells within one [`TextRun`].
@@ -119,8 +121,9 @@ impl RowCache {
         self.last_snapshot = Some(Arc::downgrade(snapshot));
         self.rows.clear();
         self.rows.reserve(snapshot.rows.len());
-        for cells in &snapshot.rows {
-            let shaped = self.shape_row(cells, ctx);
+        for (row_idx, cells) in snapshot.rows.iter().enumerate() {
+            let selected = row_selection(snapshot, row_idx, ctx.key.col_count);
+            let shaped = self.shape_row(cells, selected, ctx);
             self.rows.push(Some(shaped));
         }
     }
@@ -133,19 +136,32 @@ impl RowCache {
                 && !*flag
             {
                 *flag = true;
-                let shaped = self.shape_row(&snapshot.rows[row_idx], ctx);
+                let selected = row_selection(snapshot, row_idx, ctx.key.col_count);
+                let shaped = self.shape_row(&snapshot.rows[row_idx], selected, ctx);
                 self.rows[row_idx] = Some(shaped);
             }
         }
         for (row_idx, cells) in snapshot.rows.iter().enumerate() {
-            if self.rows[row_idx].is_none() {
-                let shaped = self.shape_row(cells, ctx);
+            if shaped_flags[row_idx] {
+                continue;
+            }
+            let selected = row_selection(snapshot, row_idx, ctx.key.col_count);
+            let selection_changed = self.rows[row_idx]
+                .as_ref()
+                .is_none_or(|cached| cached.selection != selected);
+            if selection_changed {
+                let shaped = self.shape_row(cells, selected, ctx);
                 self.rows[row_idx] = Some(shaped);
             }
         }
     }
 
-    fn shape_row(&mut self, cells: &[Cell], ctx: &ShapeContext<'_>) -> CachedRow {
+    fn shape_row(
+        &mut self,
+        cells: &[Cell],
+        selection: Option<Range<usize>>,
+        ctx: &ShapeContext<'_>,
+    ) -> CachedRow {
         #[cfg(test)]
         {
             self.reshape_count += 1;
@@ -156,9 +172,10 @@ impl RowCache {
                 line: None,
                 wide_glyphs: Vec::new(),
                 bg_runs,
+                selection,
             };
         };
-        let (text, runs, wide_glyphs) = build_row_runs(&cells[..=last], ctx);
+        let (text, runs, wide_glyphs) = build_row_runs(&cells[..=last], selection.as_ref(), ctx);
         let line = if text.is_empty() {
             None
         } else {
@@ -173,6 +190,7 @@ impl RowCache {
             line,
             wide_glyphs,
             bg_runs,
+            selection,
         }
     }
 
@@ -239,8 +257,14 @@ fn last_visible_cell(cells: &[Cell]) -> Option<usize> {
     }
 }
 
+fn row_selection(snapshot: &Snapshot, row: usize, cols: usize) -> Option<Range<usize>> {
+    let selection = snapshot.selection?;
+    selection_columns(selection, row, cols, snapshot.display_offset)
+}
+
 fn build_row_runs(
     cells: &[Cell],
+    selected: Option<&Range<usize>>,
     ctx: &ShapeContext<'_>,
 ) -> (String, Vec<TextRun>, Vec<WideGlyph>) {
     let mut text = String::with_capacity(cells.len());
@@ -250,7 +274,11 @@ fn build_row_runs(
     let mut wide_decor: Option<RunStyle> = None;
 
     for (col, cell) in cells.iter().enumerate() {
-        let fg = resolve_cell_colors(cell, &ctx.key.colors).fg;
+        let fg = if selected.is_some_and(|range| range.contains(&col)) {
+            resolve_selected_fg(cell, &ctx.key.colors)
+        } else {
+            resolve_cell_colors(cell, &ctx.key.colors).fg
+        };
         let mut style = RunStyle {
             fg,
             bold: cell.bold,

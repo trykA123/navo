@@ -11,7 +11,7 @@ use navo_term::{Sink, Size};
 use super::*;
 use crate::prelude::*;
 use crate::test_window;
-use crate::tokens::{self, Mode, Theme};
+use crate::tokens::{self, Mode, TerminalColors, TerminalScheme, Theme, contrast_ratio};
 
 fn cell(c: char) -> Cell {
     Cell {
@@ -375,4 +375,164 @@ fn headless_cursor_respects_reduced_motion_and_shapes(cx: &mut TestAppContext) {
         .expect("underline cursor bounds");
     assert_eq!(underline_bounds.size.width, block_bounds.size.width);
     assert!(underline_bounds.size.height < block_bounds.size.height);
+}
+
+#[test]
+fn selected_inverse_video_meets_aa_contrast_in_light_and_dark_themes() {
+    let inverse = Cell {
+        c: 'I',
+        inverse: true,
+        ..Cell::default()
+    };
+    for mode in [Mode::Light, Mode::Dark] {
+        let theme = Theme::new(mode);
+        let colors = &theme.terminal;
+        let fg = resolve_selected_fg(&inverse, colors);
+        let ratio = contrast_ratio(fg, colors.selection);
+        assert!(
+            ratio >= 4.5,
+            "selected inverse fg in {mode:?} must meet 4.5:1 AA against selection, got {ratio:.2}"
+        );
+    }
+}
+
+#[test]
+fn dim_inverse_cell_preserves_dim_attribute() {
+    let plain = Cell {
+        c: 'A',
+        inverse: true,
+        ..Cell::default()
+    };
+    let dimmed = Cell {
+        c: 'A',
+        inverse: true,
+        dim: true,
+        ..Cell::default()
+    };
+    for mode in [Mode::Light, Mode::Dark] {
+        let colors = &Theme::new(mode).terminal;
+        let plain_colors = resolve_cell_colors(&plain, colors);
+        let dimmed_colors = resolve_cell_colors(&dimmed, colors);
+        assert_ne!(
+            dimmed_colors.fg, plain_colors.fg,
+            "SGR 2;7 must dim the resolved foreground relative to plain SGR 7 in {mode:?}"
+        );
+        assert_eq!(dimmed_colors.bg, plain_colors.bg);
+    }
+}
+
+#[test]
+fn block_cursor_glyph_meets_aa_contrast_across_all_schemes() {
+    for mode in [Mode::Light, Mode::Dark] {
+        let theme = Theme::new(mode);
+        for scheme in TerminalScheme::ALL {
+            for keep_readable in [true, false] {
+                let colors =
+                    TerminalColors::from_scheme(scheme, mode, keep_readable, &theme.colors);
+                let fg = block_cursor_glyph_color(&colors);
+                let ratio = contrast_ratio(fg, colors.cursor);
+                assert!(
+                    ratio >= 4.5,
+                    "block cursor glyph for {scheme:?} ({mode:?}, readable={keep_readable}) must meet 4.5:1 AA, got {ratio:.2}"
+                );
+            }
+        }
+        let palette = tokens::SystemPalette {
+            window: theme.colors.background,
+            window_text: theme.colors.text,
+            highlight: theme.colors.accent,
+            highlight_text: theme.colors.background,
+            button_face: theme.colors.background,
+            button_text: theme.colors.text,
+            gray_text: theme.colors.muted,
+            hot_light: theme.colors.accent,
+        };
+        let hc = tokens::contrast_theme(&theme, &palette);
+        let fg = block_cursor_glyph_color(&hc.terminal);
+        let ratio = contrast_ratio(fg, hc.terminal.cursor);
+        assert!(
+            ratio >= 4.5,
+            "block cursor glyph for High Contrast ({mode:?}) must meet 4.5:1 AA, got {ratio:.2}"
+        );
+    }
+}
+
+#[gpui_kit::test]
+fn selection_change_invalidates_only_affected_rows(cx: &mut TestAppContext) {
+    let initial = snapshot_with_rows(
+        &[
+            "row 0: prompt",
+            "row 1: ok",
+            "row 2: inverse text",
+            "row 3: footer",
+            "row 4: ready",
+        ],
+        40,
+        vec![0, 1, 2, 3, 4],
+    );
+    let (window, view, cache) = open_harness(cx, px(800.0), initial, GridStyle::default());
+
+    cx.update_window(window, |_, window, cx| window.render_frame(cx))
+        .expect("initial paint");
+    let after_initial = cx.update(|cx| cache.read(cx).reshape_count());
+    assert_eq!(after_initial, 5);
+
+    // Add a selection on row 2 with NO damaged rows: only row 2 should reshape.
+    let mut with_sel = snapshot_with_rows(
+        &[
+            "row 0: prompt",
+            "row 1: ok",
+            "row 2: inverse text",
+            "row 3: footer",
+            "row 4: ready",
+        ],
+        40,
+        vec![],
+    );
+    with_sel.selection = Some(Selection {
+        start: Point { line: 2, col: 0 },
+        end: Point { line: 2, col: 10 },
+        block: false,
+    });
+    cx.update(|cx| {
+        view.update(cx, |harness, cx| {
+            harness.snapshot = Arc::new(with_sel);
+            cx.notify();
+        });
+    });
+    cx.update_window(window, |_, window, cx| window.render_frame(cx))
+        .expect("selected paint");
+    let after_select = cx.update(|cx| cache.read(cx).reshape_count());
+    assert_eq!(
+        after_select - after_initial,
+        1,
+        "adding selection on 1 row must reshape exactly 1 row"
+    );
+
+    // Clearing selection on row 2 with NO damaged rows: only row 2 should reshape back.
+    let cleared = snapshot_with_rows(
+        &[
+            "row 0: prompt",
+            "row 1: ok",
+            "row 2: inverse text",
+            "row 3: footer",
+            "row 4: ready",
+        ],
+        40,
+        vec![],
+    );
+    cx.update(|cx| {
+        view.update(cx, |harness, cx| {
+            harness.snapshot = Arc::new(cleared);
+            cx.notify();
+        });
+    });
+    cx.update_window(window, |_, window, cx| window.render_frame(cx))
+        .expect("cleared selection paint");
+    let after_clear = cx.update(|cx| cache.read(cx).reshape_count());
+    assert_eq!(
+        after_clear - after_select,
+        1,
+        "clearing selection on 1 row must reshape exactly 1 row"
+    );
 }

@@ -4,10 +4,12 @@
 use gpui_kit::Hsla;
 use navo_term::grid::{Cell, Color, Width};
 
-use crate::tokens::TerminalColors;
+use crate::tokens::{TerminalColors, contrast_ratio};
 
-/// Opacity applied to explicit ANSI/RGB foregrounds when SGR 2 (`dim`) is active.
+/// Opacity applied to explicit ANSI/RGB and inverse foregrounds when SGR 2 (`dim`) is active.
 const DIM_OPACITY: f32 = 0.66;
+/// Minimum WCAG AA contrast ratio required for normal text.
+const TEXT_AA_CONTRAST: f32 = 4.5;
 
 /// Resolved foreground and optional non-default background colour for one grid cell.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -28,19 +30,30 @@ pub struct BgRun {
 pub fn resolve_cell_colors(cell: &Cell, colors: &TerminalColors) -> CellColors {
     let raw_fg = resolve_color(cell.fg, colors.text, colors);
     let raw_bg = resolve_color(cell.bg, colors.background, colors);
-    if cell.inverse {
-        return CellColors {
-            fg: raw_bg,
-            bg: Some(raw_fg),
-        };
-    }
-    let fg = if cell.dim {
-        dim_foreground(cell.fg, raw_fg, colors)
+    let (base_fg, bg) = if cell.inverse {
+        (raw_bg, Some(raw_fg))
     } else {
-        raw_fg
+        (raw_fg, (cell.bg != Color::Default).then_some(raw_bg))
     };
-    let bg = (cell.bg != Color::Default).then_some(raw_bg);
+    let fg = if cell.dim {
+        dim_foreground(cell.fg, cell.inverse, base_fg, colors)
+    } else {
+        base_fg
+    };
     CellColors { fg, bg }
+}
+
+/// Resolves `cell`'s foreground when painted over the opaque `colors.selection` highlight,
+/// guaranteeing at least WCAG AA (`4.5:1`) contrast against `colors.selection`.
+pub fn resolve_selected_fg(cell: &Cell, colors: &TerminalColors) -> Hsla {
+    let fg = resolve_cell_colors(cell, colors).fg;
+    ensure_contrast_on(fg, colors.selection, colors)
+}
+
+/// Returns the foreground colour used to draw a character inside a solid `CursorShape::Block`,
+/// guaranteeing at least WCAG AA (`4.5:1`) contrast against `colors.cursor`.
+pub fn block_cursor_glyph_color(colors: &TerminalColors) -> Hsla {
+    ensure_contrast_on(colors.background, colors.cursor, colors)
 }
 
 /// Coalesces adjacent cells with identical non-default background colours into horizontal runs.
@@ -95,10 +108,33 @@ fn resolve_color(color: Color, default: Hsla, palette: &TerminalColors) -> Hsla 
     }
 }
 
-fn dim_foreground(color: Color, resolved: Hsla, palette: &TerminalColors) -> Hsla {
-    if color == Color::Default {
+fn dim_foreground(color: Color, inverse: bool, resolved: Hsla, palette: &TerminalColors) -> Hsla {
+    if !inverse && color == Color::Default {
         palette.muted
     } else {
         resolved.opacity(DIM_OPACITY)
+    }
+}
+
+fn ensure_contrast_on(preferred: Hsla, surface: Hsla, colors: &TerminalColors) -> Hsla {
+    if contrast_ratio(preferred, surface) >= TEXT_AA_CONTRAST {
+        return preferred;
+    }
+    let theme_best = higher_contrast(colors.text, colors.background, surface);
+    if contrast_ratio(theme_best, surface) >= TEXT_AA_CONTRAST {
+        return theme_best;
+    }
+    higher_contrast(
+        TerminalColors::rgb_color(0, 0, 0),
+        TerminalColors::rgb_color(255, 255, 255),
+        surface,
+    )
+}
+
+fn higher_contrast(a: Hsla, b: Hsla, surface: Hsla) -> Hsla {
+    if contrast_ratio(a, surface) >= contrast_ratio(b, surface) {
+        a
+    } else {
+        b
     }
 }

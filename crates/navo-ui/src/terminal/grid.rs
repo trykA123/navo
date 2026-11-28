@@ -5,20 +5,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::{
-    App, BorderStyle, Bounds, Element, ElementId, Entity, GlobalElementId, InspectorElementId,
-    IntoElement, LayoutId, Pixels, Point, ShapedLine, SharedString, Style, TextAlign, TextRun,
-    Window, fill, outline, point, px, relative, size,
+    App, Bounds, ContentMask, Element, ElementId, Entity, GlobalElementId, InspectorElementId,
+    IntoElement, LayoutId, Pixels, Point, ShapedLine, SharedString, Style, TextAlign, Window, fill,
+    point, px, relative, size,
 };
-use navo_term::grid::{Cell, Cursor, CursorShape, Snapshot, Width};
+use navo_term::grid::{CursorShape, Snapshot};
 
 use super::cache::{RenderKey, RowCache, ShapeContext};
-use super::{
-    CellMetrics, cursor_visible, grid_dimensions, measure_cell, selection_columns, terminal_font,
-};
+use super::cursor::{CursorEnv, PaintedCursor, paint_cursor, prepare_cursor};
+use super::{CellMetrics, grid_dimensions, measure_cell, selection_columns};
 use crate::tokens::{self, TerminalColors};
 
-/// Width of the vertical bar cursor and thickness of the underline cursor, in logical pixels.
-const CURSOR_STROKE: f32 = 2.0;
 /// Width of the command-block left accent bar, in logical pixels.
 const BLOCK_ACCENT_WIDTH: f32 = 2.0;
 
@@ -68,14 +65,6 @@ impl Default for GridStyle {
             blink_elapsed: Duration::ZERO,
         }
     }
-}
-
-/// Prepainted cursor quad and optional inverted glyph redraw for a solid block cursor.
-struct PaintedCursor {
-    shape: CursorShape,
-    bounds: Bounds<Pixels>,
-    visible: bool,
-    block_glyph: Option<(Point<Pixels>, ShapedLine)>,
 }
 
 /// State computed in [`Element::prepaint`] and consumed in [`Element::paint`].
@@ -193,62 +182,28 @@ impl Element for TerminalGrid {
             self.style.line_height,
         );
         let pad = self.style.padding;
-        let inner_w = (bounds.size.width - pad * 2.0).max(px(0.0));
-        let inner_h = (bounds.size.height - pad * 2.0).max(px(0.0));
-        let dims = grid_dimensions(inner_w, inner_h, metrics.width, metrics.height);
         let origin = point(bounds.origin.x + pad, bounds.origin.y + pad);
+        let env = CursorEnv {
+            font_family: &font_family,
+            colors,
+            origin,
+            metrics,
+            reduce_motion: cx.reduce_motion(),
+        };
+        self.sync_row_cache(&env, bounds.size.width, window, cx);
+        let cursor = self
+            .snapshot
+            .cursor
+            .map(|cursor| prepare_cursor(cursor, &self.snapshot, &self.style, &env, window));
+        record_test_paint(&self.cache, bounds, pad, metrics, cursor.as_ref(), cx);
         let row_count = self.snapshot.rows.len();
         let col_count = self.snapshot.rows.first().map_or(0, Vec::len);
-
-        let shape_ctx = ShapeContext {
-            key: RenderKey {
-                font_family: font_family.clone(),
-                font_size_bits: f32::from(self.style.font_size).to_bits(),
-                line_height_bits: self.style.line_height.to_bits(),
-                cell_width_bits: f32::from(metrics.width).to_bits(),
-                cell_height_bits: f32::from(metrics.height).to_bits(),
-                colors,
-                viewport_width_bits: f32::from(bounds.size.width).to_bits(),
-                display_offset: self.snapshot.display_offset,
-                row_count,
-                col_count,
-            },
-            font_size: self.style.font_size,
-            cell_width: metrics.width,
-            window,
-        };
-        self.cache
-            .update(cx, |cache, _| cache.sync(&self.snapshot, &shape_ctx));
-
-        let selection_runs = collect_selections(&self.snapshot, row_count, col_count);
-        let reduce_motion = cx.reduce_motion();
-        let cursor = self.snapshot.cursor.map(|cursor| {
-            prepare_cursor(
-                cursor,
-                &self.snapshot,
-                &self.style,
-                (&font_family, colors, origin, metrics, reduce_motion),
-                window,
-            )
-        });
-
-        #[cfg(test)]
-        self.cache.update(cx, |cache, _| {
-            cache.record_paint(
-                dims,
-                cursor.as_ref().map(|c| c.visible),
-                cursor.as_ref().map(|c| c.bounds),
-            );
-        });
-        #[cfg(not(test))]
-        let _ = dims;
-
         GridPrepaint {
             colors,
             metrics,
             origin,
             row_count,
-            selection_runs,
+            selection_runs: collect_selections(&self.snapshot, row_count, col_count),
             cursor,
         }
     }
@@ -264,16 +219,74 @@ impl Element for TerminalGrid {
         cx: &mut App,
     ) {
         window.paint_quad(fill(bounds, state.colors.background));
-        paint_blocks(&self.blocks, bounds, state, window);
-        paint_backgrounds(&self.cache, state, window, cx);
-        paint_selections(state, window);
-        paint_rows(&self.cache, state, window, cx);
-        if let Some(cursor) = &state.cursor
-            && cursor.visible
-        {
-            paint_cursor(cursor, state, window, cx);
-        }
+        window.with_content_mask(Some(ContentMask { bounds }), |window| {
+            paint_blocks(&self.blocks, bounds, state, window);
+            paint_backgrounds(&self.cache, state, window, cx);
+            paint_selections(state, window);
+            paint_rows(&self.cache, state, window, cx);
+            if let Some(cursor) = &state.cursor
+                && cursor.visible
+            {
+                paint_cursor(
+                    cursor,
+                    state.colors.cursor,
+                    state.metrics.height,
+                    window,
+                    cx,
+                );
+            }
+        });
     }
+}
+
+impl TerminalGrid {
+    fn sync_row_cache(
+        &self,
+        env: &CursorEnv<'_>,
+        viewport_width: Pixels,
+        window: &Window,
+        cx: &mut App,
+    ) {
+        let key = RenderKey {
+            font_family: env.font_family.clone(),
+            font_size_bits: f32::from(self.style.font_size).to_bits(),
+            line_height_bits: self.style.line_height.to_bits(),
+            cell_width_bits: f32::from(env.metrics.width).to_bits(),
+            cell_height_bits: f32::from(env.metrics.height).to_bits(),
+            colors: env.colors,
+            viewport_width_bits: f32::from(viewport_width).to_bits(),
+            display_offset: self.snapshot.display_offset,
+            row_count: self.snapshot.rows.len(),
+            col_count: self.snapshot.rows.first().map_or(0, Vec::len),
+        };
+        let shape_ctx = ShapeContext {
+            key,
+            font_size: self.style.font_size,
+            cell_width: env.metrics.width,
+            window,
+        };
+        self.cache
+            .update(cx, |cache, _| cache.sync(&self.snapshot, &shape_ctx));
+    }
+}
+
+fn record_test_paint(
+    cache: &Entity<RowCache>,
+    bounds: Bounds<Pixels>,
+    pad: Pixels,
+    metrics: CellMetrics,
+    cursor: Option<&PaintedCursor>,
+    cx: &mut App,
+) {
+    let inner_w = (bounds.size.width - pad * 2.0).max(px(0.0));
+    let inner_h = (bounds.size.height - pad * 2.0).max(px(0.0));
+    let dims = grid_dimensions(inner_w, inner_h, metrics.width, metrics.height);
+    #[cfg(test)]
+    cache.update(cx, |cache, _| {
+        cache.record_paint(dims, cursor.map(|c| c.visible), cursor.map(|c| c.bounds));
+    });
+    #[cfg(not(test))]
+    let _ = (cache, dims, cursor, cx);
 }
 
 fn collect_selections(
@@ -290,93 +303,6 @@ fn collect_selections(
             Some((row, cols))
         })
         .collect()
-}
-
-fn prepare_cursor(
-    cursor: Cursor,
-    snapshot: &Snapshot,
-    style: &GridStyle,
-    env: (
-        &SharedString,
-        TerminalColors,
-        Point<Pixels>,
-        CellMetrics,
-        bool,
-    ),
-    window: &Window,
-) -> PaintedCursor {
-    let (font_family, colors, origin, metrics, reduce_motion) = env;
-    let visible = cursor_visible(style.blink_elapsed, style.blink_enabled, reduce_motion);
-    let shape = style.cursor_shape.unwrap_or(cursor.shape);
-    let cell = snapshot
-        .rows
-        .get(usize::from(cursor.row))
-        .and_then(|row| row.get(usize::from(cursor.col)));
-    let span_cols = if cell.is_some_and(|c| c.width == Width::Wide) {
-        2.0
-    } else {
-        1.0
-    };
-    let cell_origin = point(
-        origin.x + metrics.width * f32::from(cursor.col),
-        origin.y + metrics.height * f32::from(cursor.row),
-    );
-    let cell_w = metrics.width * span_cols;
-    let bounds = match shape {
-        CursorShape::Block | CursorShape::HollowBlock => {
-            Bounds::new(cell_origin, size(cell_w, metrics.height))
-        }
-        CursorShape::Bar => Bounds::new(cell_origin, size(px(CURSOR_STROKE), metrics.height)),
-        CursorShape::Underline => Bounds::new(
-            point(
-                cell_origin.x,
-                cell_origin.y + metrics.height - px(CURSOR_STROKE),
-            ),
-            size(cell_w, px(CURSOR_STROKE)),
-        ),
-    };
-    let block_glyph = (visible && shape == CursorShape::Block)
-        .then(|| {
-            cell.and_then(|c| shape_cursor_glyph(c, font_family, style.font_size, colors, window))
-        })
-        .flatten()
-        .map(|line| (cell_origin, line));
-    PaintedCursor {
-        shape,
-        bounds,
-        visible,
-        block_glyph,
-    }
-}
-
-fn shape_cursor_glyph(
-    cell: &Cell,
-    font_family: &SharedString,
-    font_size: Pixels,
-    colors: TerminalColors,
-    window: &Window,
-) -> Option<ShapedLine> {
-    if cell.hidden
-        || cell.width == Width::Spacer
-        || matches!(cell.c, ' ' | '\0' | '\n' | '\r' | '\t')
-    {
-        return None;
-    }
-    let mut buf = [0u8; 4];
-    let text = cell.c.encode_utf8(&mut buf);
-    let run = TextRun {
-        len: text.len(),
-        font: terminal_font(font_family.clone(), cell.bold, cell.italic),
-        color: colors.background,
-        background_color: None,
-        underline: None,
-        strikethrough: None,
-    };
-    Some(
-        window
-            .text_system()
-            .shape_line(SharedString::new(text), font_size, &[run], None),
-    )
 }
 
 fn paint_blocks(
@@ -478,30 +404,5 @@ fn paint_rows(cache: &Entity<RowCache>, state: &GridPrepaint, window: &mut Windo
                 cx,
             );
         }
-    }
-}
-
-fn paint_cursor(cursor: &PaintedCursor, state: &GridPrepaint, window: &mut Window, cx: &mut App) {
-    match cursor.shape {
-        CursorShape::HollowBlock => {
-            window.paint_quad(outline(
-                cursor.bounds,
-                state.colors.cursor,
-                BorderStyle::Solid,
-            ));
-        }
-        CursorShape::Block | CursorShape::Bar | CursorShape::Underline => {
-            window.paint_quad(fill(cursor.bounds, state.colors.cursor));
-        }
-    }
-    if let Some((origin, glyph)) = &cursor.block_glyph {
-        let _ = glyph.paint(
-            *origin,
-            state.metrics.height,
-            TextAlign::Left,
-            None,
-            window,
-            cx,
-        );
     }
 }
