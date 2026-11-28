@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex, mpsc};
+use std::cell::RefCell;
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use gpui_kit::test::TestWindowExt;
@@ -15,12 +16,11 @@ use crate::command_center::ContentSource;
 use crate::find_results::run::{FindRun, RunEvent};
 use crate::test_pointer::click;
 
-type WalkCalls = Arc<Mutex<Vec<FindQuery>>>;
-
 struct Rig {
     window: AnyWindowHandle,
     view: Entity<NavoWindow>,
-    walk_calls: WalkCalls,
+    walk_rx: mpsc::Receiver<FindQuery>,
+    walk_calls: RefCell<Vec<FindQuery>>,
 }
 
 fn rig(cx: &mut TestAppContext) -> Rig {
@@ -29,12 +29,11 @@ fn rig(cx: &mut TestAppContext) -> Rig {
     let (window, view) = open_options(cx, options_for(fs, state));
     settle(cx, &view);
 
-    let walk_calls = WalkCalls::default();
-    let sink = walk_calls.clone();
+    let (tx, walk_rx) = mpsc::sync_channel(32);
     view.update(cx, |view, _| {
         view.command_center.content_source =
             ContentSource::with_walk(Arc::new(move |_, query, _, _| {
-                sink.lock().expect("walk calls").push(query.clone());
+                let _ = tx.send(query.clone());
                 Ok(FindProgress::default())
             }));
     });
@@ -42,7 +41,8 @@ fn rig(cx: &mut TestAppContext) -> Rig {
     Rig {
         window,
         view,
-        walk_calls,
+        walk_rx,
+        walk_calls: RefCell::new(Vec::new()),
     }
 }
 
@@ -112,15 +112,27 @@ impl Rig {
         cx.run_until_parked();
     }
 
+    fn has_walks(&self) -> bool {
+        let mut calls = self.walk_calls.borrow_mut();
+        while let Ok(query) = self.walk_rx.try_recv() {
+            calls.push(query);
+        }
+        !calls.is_empty()
+    }
+
     fn wait_for_walks(&self, expected: usize) -> Vec<FindQuery> {
         let deadline = Instant::now() + Duration::from_secs(2);
-        loop {
-            let calls = self.walk_calls.lock().expect("walk calls").clone();
-            if calls.len() >= expected || Instant::now() > deadline {
-                return calls;
+        let mut calls = self.walk_calls.borrow_mut();
+        while calls.len() < expected {
+            let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+                break;
+            };
+            match self.walk_rx.recv_timeout(left) {
+                Ok(query) => calls.push(query),
+                Err(_) => break,
             }
-            std::thread::sleep(Duration::from_millis(5));
         }
+        calls.clone()
     }
 }
 
@@ -300,7 +312,7 @@ fn ctrl_l_enters_inline_edit_escape_cancels_and_enter_commits_and_reruns(cx: &mu
     // Escape cancels edit without changing tab query or closing/leaving the Find window.
     rig.press_in(cx, find, "escape");
     assert_eq!(rig.active_text(cx).as_deref(), Some("alpha ext:rs"));
-    assert!(rig.walk_calls.lock().expect("walk calls").is_empty());
+    assert!(!rig.has_walks());
     cx.update_window(find, |_, window, cx| {
         window.render_frame(cx);
         assert!(window.try_find("find-query-input").is_none());

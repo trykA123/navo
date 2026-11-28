@@ -21,15 +21,22 @@ fn view_of(updater: &Arc<Updater>) -> UpdateView {
     (updater.hooks().state)()
 }
 
-fn wait_for(updater: &Arc<Updater>, wanted: impl Fn(&UpdateView) -> bool) -> UpdateView {
-    for _ in 0..1000 {
-        let view = view_of(updater);
-        if wanted(&view) {
-            return view;
+fn poll_until<T>(attempts: usize, mut check: impl FnMut() -> Option<T>) -> Option<T> {
+    for _ in 0..attempts {
+        if let Some(found) = check() {
+            return Some(found);
         }
         std::thread::sleep(Duration::from_millis(5));
     }
-    panic!("the state never matched: {:?}", view_of(updater));
+    None
+}
+
+fn wait_for(updater: &Arc<Updater>, wanted: impl Fn(&UpdateView) -> bool) -> UpdateView {
+    poll_until(1000, || {
+        let view = view_of(updater);
+        wanted(&view).then_some(view)
+    })
+    .unwrap_or_else(|| panic!("the state never matched: {:?}", view_of(updater)))
 }
 
 const LONG: Duration = Duration::from_secs(3600);
@@ -296,25 +303,19 @@ fn rel(text: &str) -> Release {
 
 fn wait_targets(updater: &Arc<Updater>) -> Vec<navo_ui::window_view::RollbackTargetView> {
     let hooks = updater.hooks();
-    for _ in 0..400 {
+    poll_until(400, || {
         let targets = (hooks.rollback_targets)();
-        if !targets.is_empty() {
-            return targets;
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    }
-    Vec::new()
+        (!targets.is_empty()).then_some(targets)
+    })
+    .unwrap_or_default()
 }
 
 fn wait_rollback_calls(fake: &Arc<FakeFeed>, expected: usize) -> Vec<Version> {
-    for _ in 0..400 {
+    poll_until(400, || {
         let calls = fake.rollback_calls();
-        if calls.len() >= expected {
-            return calls;
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    }
-    fake.rollback_calls()
+        (calls.len() >= expected).then_some(calls)
+    })
+    .unwrap_or_else(|| fake.rollback_calls())
 }
 
 #[test]
@@ -537,21 +538,15 @@ fn panicking_rollback_resets_in_flight_flag() {
     let hooks = updater.hooks();
 
     assert_eq!((hooks.apply_rollback)("0.9.3"), Ok(()));
-    for _ in 0..400 {
-        if !updater.rollback_in_flight.load(Ordering::SeqCst)
-            && feed.calls.load(Ordering::SeqCst) >= 1
-        {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    poll_until(400, || {
+        (!updater.rollback_in_flight.load(Ordering::SeqCst)
+            && feed.calls.load(Ordering::SeqCst) >= 1)
+            .then_some(())
+    });
     assert!(!updater.rollback_in_flight.load(Ordering::SeqCst));
     assert_eq!((hooks.apply_rollback)("0.9.3"), Ok(()));
-    for _ in 0..400 {
-        if feed.calls.load(Ordering::SeqCst) >= 2 {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    poll_until(400, || {
+        (feed.calls.load(Ordering::SeqCst) >= 2).then_some(())
+    });
     assert_eq!(feed.calls.load(Ordering::SeqCst), 2);
 }
