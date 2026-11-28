@@ -245,6 +245,14 @@ impl Grid {
         self.lock().term.grid().history_size()
     }
 
+    /// Monotonic grid line of the cursor (`history_size + cursor_row`).
+    pub fn cursor_line(&self) -> usize {
+        let state = self.lock();
+        let grid = state.term.grid();
+        let row = usize::try_from(grid.cursor.point.line.0).unwrap_or(0);
+        grid.history_size().saturating_add(row)
+    }
+
     /// The modes the shell turned on, for encoding keys and pastes.
     pub fn modes(&self) -> Modes {
         let mode = *self.lock().term.mode();
@@ -302,6 +310,10 @@ impl Sink for Grid {
     fn exited(&self, code: Option<u32>) {
         self.lock().exit = Some(code);
         self.mark_dirty();
+    }
+
+    fn cursor_line(&self) -> Option<usize> {
+        Some(self.cursor_line())
     }
 }
 

@@ -18,6 +18,11 @@ pub trait Sink: Send + Sync {
     fn output(&self, bytes: &[u8]);
     /// The process ended; `code` is `None` when the exit status could not be read.
     fn exited(&self, code: Option<u32>);
+    /// Monotonic grid line (`history_size + cursor_row`) right after the latest `output` call,
+    /// used to anchor OSC 133 marks for command blocks; `None` when the sink has no grid.
+    fn cursor_line(&self) -> Option<usize> {
+        None
+    }
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -108,6 +113,13 @@ mod fake {
         /// Makes the fake process exit with `code`.
         pub fn exit(&self, code: u32) {
             self.sink.exited(Some(code));
+        }
+
+        /// Redirects future fake output and exit events through `sink` (for example a `PromptSink`).
+        #[must_use]
+        pub fn with_sink(mut self, sink: Arc<dyn Sink>) -> Self {
+            self.sink = sink;
+            self
         }
 
         fn with_log<T>(&self, f: impl FnOnce(&mut Log) -> T) -> T {

@@ -17,6 +17,7 @@ use std::thread::{self, JoinHandle};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 use crate::backend::{Backend, Sink};
+use crate::prompt::{Nonce, PromptSink, PtyWriter, ShellHook};
 use crate::shells::ShellSpec;
 use crate::{Size, TermError};
 
@@ -60,7 +61,7 @@ impl PtyBackend {
         }
         let child = pair
             .slave
-            .spawn_command(command(shell, cwd))
+            .spawn_command(command(shell, cwd, None))
             .map_err(|error| spawn_error(shell, cwd, &*error))?;
         drop(pair.slave);
         let process = (child, pair.master);
@@ -87,6 +88,68 @@ impl PtyBackend {
             outbox,
         })
     }
+
+    /// Starts `shell` with an optional prompt hook, wired to one `PtyWriter` and `PromptSink`.
+    pub(crate) fn spawn_session(
+        shell: &ShellSpec,
+        cwd: &Path,
+        size: Size,
+        sink: Arc<dyn Sink>,
+        nonce: Option<Nonce>,
+        hook: Option<&ShellHook>,
+    ) -> Result<Arc<PtyWriter>, TermError> {
+        size.check()?;
+        if shell.program.is_absolute() && !shell.program.is_file() {
+            return Err(TermError::ShellMissing(shell.label.clone()));
+        }
+        let pair = native_pty_system()
+            .openpty(pty_size(size))
+            .map_err(|error| TermError::Io(os_error(&*error)))?;
+        let reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|error| TermError::Io(os_error(&*error)))?;
+        let writer = pair
+            .master
+            .take_writer()
+            .map_err(|error| TermError::Io(os_error(&*error)))?;
+        if !cwd.is_dir() {
+            return Err(TermError::CwdMissing(cwd.to_path_buf()));
+        }
+        let child = pair
+            .slave
+            .spawn_command(command(shell, cwd, hook))
+            .map_err(|error| spawn_error(shell, cwd, &*error))?;
+        drop(pair.slave);
+        let process = (child, pair.master);
+        let outbox = Arc::new(Outbox::default());
+        let started = input::start(writer).and_then(|input| {
+            let replies = cfg!(windows).then(|| input.replies());
+            output::read(reader, handshake::Handshake::new(replies), &outbox).map(|()| input)
+        });
+        let input = match started {
+            Ok(input) => input,
+            Err(error) => {
+                child::abandon(process, &outbox);
+                return Err(TermError::Io(error));
+            }
+        };
+        let control = child::start(process, &outbox).map_err(TermError::Io)?;
+        let backend = Self {
+            input,
+            control,
+            #[cfg(all(test, unix))]
+            outbox: Arc::clone(&outbox),
+        };
+        let pty_writer = Arc::new(PtyWriter::new(shell.kind, nonce, Box::new(backend)));
+        let prompt_sink = Arc::new(PromptSink::for_writer(&pty_writer, sink));
+        if let Err(error) = output::deliver(&outbox, prompt_sink) {
+            outbox.close();
+            drop(pty_writer);
+            return Err(TermError::Io(error));
+        }
+        Ok(pty_writer)
+    }
 }
 
 impl Backend for PtyBackend {
@@ -108,9 +171,15 @@ impl PtyBackend {
     }
 }
 
-fn command(shell: &ShellSpec, cwd: &Path) -> CommandBuilder {
+fn command(shell: &ShellSpec, cwd: &Path, hook: Option<&ShellHook>) -> CommandBuilder {
     let mut command = CommandBuilder::new(&shell.program);
     command.args(&shell.args);
+    if let Some(hook) = hook {
+        command.args(hook.args());
+        for (key, value) in hook.env() {
+            command.env(key, value);
+        }
+    }
     command.cwd(cwd);
     if !cfg!(windows) {
         command.env("TERM", "xterm-256color");

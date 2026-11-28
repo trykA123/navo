@@ -6654,6 +6654,7 @@ name = "navo-term"
 version = "0.9.3"
 dependencies = [
  "alacritty_terminal",
+ "getrandom 0.4.3",
  "navo-term",
  "parking_lot",
  "portable-pty",
