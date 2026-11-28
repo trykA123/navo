@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use super::Recorder;
 use crate::shells::{Probe, detect};
-use crate::{Session, ShellKind, ShellSpec, Size};
+use crate::{PromptState, Session, ShellKind, ShellSpec, Size};
 
 const SIZE: Size = Size {
     cols: 120,
@@ -79,4 +79,29 @@ fn dropping_a_live_conpty_session_ends_cmd_within_the_limit() {
     assert!(start.elapsed() < Duration::from_millis(500), "drop blocked");
     let seen = sink.wait_within(Duration::from_secs(5), |seen| seen.exit.is_some());
     assert_eq!(seen.exits, 1);
+}
+
+#[test]
+fn windows_powershell_reaches_trusted_prompt_without_recursion() {
+    let shell = detect(&Probe::system(Vec::new()))
+        .into_iter()
+        .find(|shell| shell.kind == ShellKind::WindowsPowerShell)
+        .expect("WindowsPowerShell detected on Windows");
+    let sink = Arc::new(Recorder::default());
+    let session = Session::spawn(&shell, Path::new("C:\\"), SIZE, sink.clone()).unwrap();
+    let seen = sink.wait_within(LIMIT, |seen| {
+        session.prompt() == PromptState::AtPrompt { typed: false } && seen.printed("PS ")
+    });
+    assert_eq!(
+        session.prompt(),
+        PromptState::AtPrompt { typed: false },
+        "output: {:?}",
+        String::from_utf8_lossy(&seen.output)
+    );
+    assert!(
+        seen.printed("PS "),
+        "output: {:?}",
+        String::from_utf8_lossy(&seen.output)
+    );
+    drop(session);
 }

@@ -25,7 +25,7 @@ pub mod view;
 mod watch;
 
 pub use code_page::{ansi_code_page, encoding_for_code_page};
-pub use durable_replace::native_replace_durable;
+pub use durable_replace::{native_replace_durable, native_replace_user_durable};
 pub(crate) use exists::{ALREADY_EXISTS_CODES, already_exists};
 pub use fake::{FakeFs, FakeOp, Fault};
 pub use hex_patch::{

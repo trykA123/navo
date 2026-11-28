@@ -486,6 +486,35 @@ fn prompt_shell_hooks_cover_pwsh_windows_powershell_and_cmd() {
 }
 
 #[test]
+fn powershell_prompt_hook_captures_script_block_before_redefining_prompt() {
+    let nonce = Nonce::from_hex(TEST_NONCE);
+
+    for kind in [ShellKind::Pwsh, ShellKind::WindowsPowerShell] {
+        let spec = shell_spec(kind, "powershell.exe", &["-NoLogo"]);
+        let hook = ShellHook::for_shell(&spec, &nonce).expect("PowerShell hook");
+        let script = &hook.args()[2];
+        let (setup, body) = script
+            .split_once("function global:prompt")
+            .expect("script defines function global:prompt");
+
+        assert!(
+            setup.contains(".ScriptBlock"),
+            "{kind:?} must capture immutable .ScriptBlock before redefining Function:prompt"
+        );
+        assert!(
+            !body.contains("$global:__navo_p.ScriptBlock"),
+            "{kind:?} prompt body must not dereference mutable FunctionInfo.ScriptBlock"
+        );
+        assert!(
+            body.contains("& $global:__navo_p"),
+            "{kind:?} prompt body must invoke captured ScriptBlock directly"
+        );
+        assert!(!script.contains('"'), "script must stay single-quote-only");
+        assert!(!script.contains('`'), "script must stay backtick-free");
+    }
+}
+
+#[test]
 fn prompt_writer_fault_injection_fails_closed() {
     let (backend, _chunks, fail_next) = ChunkedBackend::new();
     let writer = Arc::new(PtyWriter::new(

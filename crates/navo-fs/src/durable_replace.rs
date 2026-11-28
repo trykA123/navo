@@ -16,6 +16,31 @@ pub fn native_replace_durable(source: &Path, target: &Path) -> io::Result<()> {
     )
 }
 
+/// Replaces a target with a synced, create-new sibling for non-elevated user-space callers.
+/// Caller excludes symlinks/reparse redirection. On Windows, falls back to direct replacement
+/// without a raw-volume flush when opening the volume handle fails with `PermissionDenied`.
+pub fn native_replace_user_durable(source: &Path, target: &Path) -> io::Result<()> {
+    #[cfg(not(windows))]
+    {
+        native_replace_durable(source, target)
+    }
+    #[cfg(windows)]
+    {
+        let parent = target.parent().ok_or(io::ErrorKind::InvalidInput)?;
+        if source.parent() != Some(parent) || source == target {
+            return Err(io::ErrorKind::InvalidInput.into());
+        }
+        // Raw volume write handles require Administrator privileges on Windows; skip only the
+        // volume flush barrier when open_barrier returns PermissionDenied so normal users still
+        // get verbatim-path POSIX/write-through replacement with full target ACL enforcement.
+        replace_user_with(
+            open_barrier(parent),
+            || replace(source, target),
+            |h| h.sync_all(),
+        )
+    }
+}
+
 /// Acquires a barrier handle, replaces once, then persists; any failure stops work.
 fn replace_with<H>(
     handle: io::Result<H>,
@@ -25,6 +50,25 @@ fn replace_with<H>(
     let handle = handle?;
     replace()?;
     flush(handle)
+}
+
+/// Acquires an optional barrier handle, replaces once, and flushes only when a handle was
+/// acquired. Tolerates `PermissionDenied` from barrier acquisition while propagating all
+/// other barrier faults and every replace or flush error.
+#[cfg(any(windows, test))]
+fn replace_user_with<H>(
+    barrier: io::Result<H>,
+    replace: impl FnOnce() -> io::Result<()>,
+    flush: impl FnOnce(H) -> io::Result<()>,
+) -> io::Result<()> {
+    match barrier {
+        Ok(handle) => {
+            replace()?;
+            flush(handle)
+        }
+        Err(error) if error.kind() == io::ErrorKind::PermissionDenied => replace(),
+        Err(error) => Err(error),
+    }
 }
 
 #[cfg(not(windows))]

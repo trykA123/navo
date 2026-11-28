@@ -152,7 +152,9 @@ fn has_powershell_command_flag(args: &[String]) -> bool {
 fn powershell_prompt_script(nonce: &Nonce) -> String {
     let nonce = nonce.as_str();
     format!(
-        "$global:__navo_p = Get-Item -Path Function:prompt -ErrorAction SilentlyContinue; \
+        "$__np = Get-Item -Path Function:prompt -ErrorAction SilentlyContinue; \
+         $global:__navo_p = if ($null -ne $__np) {{ $__np.ScriptBlock }} else {{ $null }}; \
+         Remove-Variable -Name __np -ErrorAction SilentlyContinue; \
          $global:__navo_r = @($false); \
          function global:prompt {{ \
            $ok = $?; \
@@ -167,7 +169,7 @@ fn powershell_prompt_script(nonce: &Nonce) -> String {
              $global:__navo_r[0] = $true; '' \
            }}; \
            $body = if ($null -ne $global:__navo_p) {{ \
-             & $global:__navo_p.ScriptBlock \
+             & $global:__navo_p \
            }} else {{ \
              'PS ' + $executionContext.SessionState.Path.CurrentLocation + ('>' * ($nestedPromptLevel + 1)) + ' ' \
            }}; \

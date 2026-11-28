@@ -1,6 +1,6 @@
 //! Durable editor draft store under `<data>/drafts/` (E7a).
 //!
-//! Writes go exclusively through `navo_fs::native_replace_durable` after syncing a sibling temp
+//! Writes go exclusively through `navo_fs::native_replace_user_durable` after syncing a sibling temp
 //! file, capping payloads at 32 MiB and checksum-verifying every record with BLAKE3.
 
 mod codec;
@@ -190,7 +190,7 @@ impl DraftStore {
         self.draft_path_for_key(&Self::key_for(target))
     }
 
-    /// Atomically saves a draft for `target` via `navo_fs::native_replace_durable`.
+    /// Atomically saves a draft for `target` via `navo_fs::native_replace_user_durable`.
     ///
     /// Payloads larger than [`MAX_DRAFT_BYTES`] are skipped without writing a file, and any
     /// stale previous draft for `target` is removed.
@@ -312,7 +312,7 @@ type HookStage = WriteStage;
 #[cfg(not(test))]
 type HookStage = ();
 
-/// Writes `bytes` to a synced create-new sibling temp file and commits via `native_replace_durable`.
+/// Writes `bytes` to a synced create-new sibling temp file and commits via `native_replace_user_durable`.
 fn write_durable(
     final_path: &Path,
     bytes: &[u8],
@@ -326,7 +326,7 @@ fn write_durable(
     let temp_path = temp.close_file();
     fire_post_sync(hook)?;
     fire_pre_replace(hook)?;
-    navo_fs::native_replace_durable(&temp_path, final_path)?;
+    navo_fs::native_replace_user_durable(&temp_path, final_path)?;
     temp.disarm();
     Ok(())
 }

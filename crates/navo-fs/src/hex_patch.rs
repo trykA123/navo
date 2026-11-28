@@ -418,7 +418,7 @@ type FaultHook<'a> = &'a mut dyn FnMut(SaveFaultStage) -> io::Result<()>;
 type FaultHook<'a> = &'a mut dyn FnMut(()) -> io::Result<()>;
 
 /// Streams `target` in fixed chunks while applying `patches` into a synced sibling temp file,
-/// checks `expected` file stamp before writing and replacing, and commits via `native_replace_durable`.
+/// checks `expected` file stamp before writing and replacing, and commits via `native_replace_user_durable`.
 pub fn save_patched_file(
     target: &Path,
     expected: &HexFileStamp,
@@ -466,7 +466,7 @@ fn save_patched_inner(
         return Err(HexSaveError::FileChangedOnDisk);
     }
     fire_before_replace(hook)?;
-    crate::native_replace_durable(&temp.path, target)?;
+    crate::native_replace_user_durable(&temp.path, target)?;
     temp.disarm();
     Ok(HexFileStamp::from_path(target)?)
 }
