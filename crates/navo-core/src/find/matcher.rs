@@ -3,16 +3,18 @@ use std::io::{self, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use aho_corasick::AhoCorasick;
-use encoding_rs::{UTF_16BE, UTF_16LE, WINDOWS_1252};
+use encoding_rs::UTF_16BE;
 use memchr::memmem;
 use regex::{Regex, RegexBuilder};
 
 use super::{FindQuery, NameFilter};
+use decode::{bom_len, decode_line, snippet, wide_from_head};
+
+mod decode;
 
 const CHUNK: usize = 1024 * 1024;
 const PROBE: usize = 8192;
 const HIT_LIMIT: usize = 1000;
-const TEXT_LIMIT: usize = 200;
 
 pub struct Compiled {
     kind: Kind,
@@ -149,7 +151,8 @@ pub fn scan(
     if scanner.cancelled() || scanner.is_binary(&head) {
         return Ok(scanner.found);
     }
-    scanner.push(&head[scanner.bom_len()..]);
+    let skip = bom_len(scanner.wide);
+    scanner.push(&head[skip..]);
     let mut buffer = vec![0; CHUNK];
     while !scanner.cancelled() {
         let count = read_chunk(&mut reader, &mut buffer)?;
@@ -183,11 +186,7 @@ struct Scanner<'a> {
 
 impl<'a> Scanner<'a> {
     fn new(head: &[u8], compiled: &'a Compiled, cancel: &'a AtomicBool) -> Self {
-        let wide = match head.get(..2) {
-            Some([0xff, 0xfe]) => Some(UTF_16LE),
-            Some([0xfe, 0xff]) => Some(UTF_16BE),
-            _ => None,
-        };
+        let wide = wide_from_head(head);
         Self {
             compiled,
             cancel,
@@ -196,10 +195,6 @@ impl<'a> Scanner<'a> {
             line: 1,
             found: FileHits::default(),
         }
-    }
-
-    fn bom_len(&self) -> usize {
-        if self.wide.is_some() { 2 } else { 0 }
     }
 
     fn cancelled(&mut self) -> bool {
@@ -273,22 +268,4 @@ impl<'a> Scanner<'a> {
             self.record_line(&pending);
         }
     }
-}
-
-fn decode_line<'a>(bytes: &'a [u8], wide: Option<&'static encoding_rs::Encoding>) -> Cow<'a, str> {
-    if let Some(encoding) = wide {
-        return encoding.decode_without_bom_handling(bytes).0;
-    }
-    match std::str::from_utf8(bytes) {
-        Ok(text) => Cow::Borrowed(text),
-        Err(_) => WINDOWS_1252.decode_without_bom_handling(bytes).0,
-    }
-}
-
-fn snippet(text: &str, column: usize) -> String {
-    let length = text.chars().count();
-    let start = column
-        .saturating_sub(TEXT_LIMIT / 2)
-        .min(length.saturating_sub(TEXT_LIMIT));
-    text.chars().skip(start).take(TEXT_LIMIT).collect()
 }
