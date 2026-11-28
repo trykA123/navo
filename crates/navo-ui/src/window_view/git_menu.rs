@@ -237,6 +237,7 @@ impl NavoWindow {
         let mut entries = self.command_entries();
         entries.retain(shown);
         entries.extend(self.restart_entry());
+        entries.extend(self.viewer_commands());
         entries
     }
 

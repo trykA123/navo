@@ -1,6 +1,6 @@
 use navo_automotive::{EXTENSIONS, sniff};
 
-use super::{Load, Loaded, Slot, Sniff, ViewerKind, named};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind, named, toggles};
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::memory::{MemoryBody, MemoryFile};
@@ -49,5 +49,9 @@ impl ViewerKind for MemoryKind {
             .downcast::<MemoryFile>()
             .map_err(|_| "The memory image view got data it cannot show.".to_owned())?;
         Ok(Box::new(MemoryBody::new(&file, attach.host, cx)))
+    }
+
+    fn commands(&self) -> &'static [crate::commands::CommandSpec] {
+        toggles::MEMORY
     }
 }

@@ -91,6 +91,7 @@ pub(in crate::window_view) use tree::FilterBack;
 pub use view_menu::view_menu;
 
 use super::NavoWindow;
+use crate::commands::CommandEntry;
 use crate::prelude::*;
 use open::Opening;
 pub(super) use open::{Opened, Picked, Request, Turn, sniff_and_load};
@@ -311,6 +312,22 @@ impl NavoWindow {
         });
         self.viewer = Some(viewer);
         cx.notify();
+    }
+
+    /// The palette entries of the open viewer's kind: the view toggles it owns, or none.
+    pub(super) fn viewer_commands(&self) -> Vec<CommandEntry> {
+        let Some(kind) = self.viewer.as_ref().and_then(|viewer| viewer.kind.as_ref()) else {
+            return Vec::new();
+        };
+        kind.commands()
+            .iter()
+            .map(|&spec| CommandEntry {
+                spec,
+                enabled: true,
+                in_palette: true,
+                arg: None,
+            })
+            .collect()
     }
 
     pub(super) fn warn_unsaved(&mut self, cx: &mut Context<Self>) -> bool {

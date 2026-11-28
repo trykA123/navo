@@ -414,3 +414,51 @@ fn tasking_text_in_a_file_not_named_map_stays_text() {
     assert!(!map_kinds("notes.txt", TASKING_HEAD).contains(&"linker-map"));
     assert!(!map_kinds("app.map.bak", TASKING_HEAD).contains(&"linker-map"));
 }
+
+fn listed(kind: &dyn ViewerKind) -> Vec<&'static str> {
+    kind.commands().iter().map(|spec| spec.name).collect()
+}
+
+#[test]
+fn a_layout_viewer_owns_the_toggles_its_view_menu_shows() {
+    let layout = [
+        "view.opens_inspector",
+        "view.memory_strip",
+        "view.usage_bars",
+        "view.who_uses",
+        "view.row_bars",
+    ];
+    assert_eq!(listed(&super::map::MapKind), layout);
+    assert_eq!(listed(&super::elf::ElfKind), layout);
+}
+
+#[test]
+fn a_memory_image_owns_the_inspector_strip_charts_and_row_bars() {
+    assert_eq!(
+        listed(&super::memory::MemoryKind),
+        [
+            "view.opens_inspector",
+            "view.memory_strip",
+            "view.charts",
+            "view.row_bars",
+        ]
+    );
+}
+
+#[test]
+fn a_table_or_outline_viewer_owns_the_inspector_toggle_only() {
+    for kind in [
+        &super::mdf::MdfKind as &dyn ViewerKind,
+        &super::trace::TraceKind,
+        &super::description::DbcKind,
+        &super::description::A2lKind,
+    ] {
+        assert_eq!(listed(kind), ["view.opens_inspector"]);
+    }
+}
+
+#[test]
+fn a_plain_text_or_hex_viewer_owns_no_view_toggles() {
+    assert_eq!(listed(&super::text::Text), Vec::<&str>::new());
+    assert_eq!(listed(&super::hex::Hex), Vec::<&str>::new());
+}

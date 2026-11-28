@@ -1,6 +1,6 @@
 use navo_automotive::{Evidence, TRACE_EXTENSIONS, sniff_blf, sniff_trace};
 
-use super::{Load, Loaded, Slot, Sniff, ViewerKind, named};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind, named, toggles};
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::trace::{TraceBody, TraceFile};
@@ -61,5 +61,9 @@ impl ViewerKind for TraceKind {
             .downcast::<TraceFile>()
             .map_err(|_| "The CAN trace view got data it cannot show.".to_owned())?;
         Ok(Box::new(TraceBody::new(&file, attach.host, cx)))
+    }
+
+    fn commands(&self) -> &'static [crate::commands::CommandSpec] {
+        toggles::INSPECTOR_ONLY
     }
 }

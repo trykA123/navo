@@ -3,7 +3,7 @@ use std::io::BufReader;
 use navo_automotive::{Watch, a2l, index_a2l, index_dbc, sniff_a2l, sniff_dbc};
 use navo_l10n::t;
 
-use super::{Load, Loaded, Slot, Sniff, ViewerKind, named};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind, named, toggles};
 use crate::prelude::*;
 use crate::window_view::viewer::background::{Ranged, ranged};
 use crate::window_view::viewer::body::{Attach, ViewerBody};
@@ -56,6 +56,10 @@ impl ViewerKind for DbcKind {
     ) -> Result<Box<dyn ViewerBody>, String> {
         attach_description(attach, cx)
     }
+
+    fn commands(&self) -> &'static [crate::commands::CommandSpec] {
+        toggles::INSPECTOR_ONLY
+    }
 }
 
 impl ViewerKind for A2lKind {
@@ -102,6 +106,10 @@ impl ViewerKind for A2lKind {
         cx: &mut App,
     ) -> Result<Box<dyn ViewerBody>, String> {
         attach_description(attach, cx)
+    }
+
+    fn commands(&self) -> &'static [crate::commands::CommandSpec] {
+        toggles::INSPECTOR_ONLY
     }
 }
 

@@ -11,6 +11,7 @@ mod memory;
 mod pdf;
 mod table;
 mod text;
+mod toggles;
 mod trace;
 mod tree;
 
@@ -24,6 +25,7 @@ use navo_core::encoding::Encoding;
 
 use super::FileHooks;
 use super::body::{Attach, ViewerBody};
+use crate::commands::CommandSpec;
 use crate::prelude::*;
 
 pub use crate::compare_diff::EDIT_LIMIT;
@@ -153,6 +155,11 @@ pub trait ViewerKind: Send + Sync {
 
     fn declined(&self, _: &Sniff<'_>) -> Option<&'static str> {
         None
+    }
+
+    /// The palette commands this kind adds while one of its viewers is open.
+    fn commands(&self) -> &'static [CommandSpec] {
+        &[]
     }
 }
 

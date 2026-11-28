@@ -69,6 +69,13 @@ pub(super) const HIDDEN: &[&str] = &[
     "viewer.go_to_end",
     "viewer.scroll_left",
     "viewer.scroll_right",
+    // The six automotive view toggles: the open viewer kind lists the ones it owns.
+    "view.opens_inspector",
+    "view.memory_strip",
+    "view.charts",
+    "view.row_bars",
+    "view.usage_bars",
+    "view.who_uses",
     "lister.page_or_next_image",
     "find.result_up",
     "find.result_down",

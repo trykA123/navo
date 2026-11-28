@@ -1,6 +1,6 @@
 use navo_automotive::sniff_map;
 
-use super::{Load, Loaded, Slot, Sniff, ViewerKind, named};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind, named, toggles};
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::map::{MapBody, MapFile};
@@ -50,5 +50,9 @@ impl ViewerKind for MapKind {
             .downcast::<MapFile>()
             .map_err(|_| "The linker map view got data it cannot show.".to_owned())?;
         Ok(Box::new(MapBody::new(&file, &attach.host, cx)))
+    }
+
+    fn commands(&self) -> &'static [crate::commands::CommandSpec] {
+        toggles::LAYOUT
     }
 }

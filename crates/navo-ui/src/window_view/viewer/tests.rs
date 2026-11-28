@@ -58,6 +58,7 @@ mod tree_query;
 mod view_parts;
 mod view_parts_md;
 mod view_rig;
+mod view_toggles;
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

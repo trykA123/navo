@@ -1,6 +1,6 @@
 use navo_automotive::sniff_elf;
 
-use super::{Load, Loaded, Slot, Sniff, ViewerKind};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind, toggles};
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::elf::{ElfBody, ElfFile};
@@ -46,5 +46,9 @@ impl ViewerKind for ElfKind {
             .downcast::<ElfFile>()
             .map_err(|_| "The ELF view got data it cannot show.".to_owned())?;
         Ok(Box::new(ElfBody::new(&file, &attach.host, cx)))
+    }
+
+    fn commands(&self) -> &'static [crate::commands::CommandSpec] {
+        toggles::LAYOUT
     }
 }

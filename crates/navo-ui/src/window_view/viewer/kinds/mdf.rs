@@ -1,7 +1,7 @@
 use navo_automotive::sniff_mdf;
 use navo_l10n::t;
 
-use super::{Load, Loaded, Slot, Sniff, ViewerKind, named};
+use super::{Load, Loaded, Slot, Sniff, ViewerKind, named, toggles};
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::mdf::{MdfBody, MdfFile};
@@ -51,5 +51,9 @@ impl ViewerKind for MdfKind {
             .downcast::<MdfFile>()
             .map_err(|_| t!("viewer-mdf-bad-data"))?;
         Ok(Box::new(MdfBody::new(&file, &attach.host, cx)))
+    }
+
+    fn commands(&self) -> &'static [crate::commands::CommandSpec] {
+        toggles::INSPECTOR_ONLY
     }
 }
