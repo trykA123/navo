@@ -233,7 +233,14 @@ impl<'a> Walk<'a> {
         }
         if found.hits.skipped.is_some() {
             self.progress.skipped += 1;
-        } else if found.hits.total > 0 || self.filters.query.text.is_empty() {
+            return self.check_cancelled();
+        }
+        let keep = if self.filters.query.invert {
+            found.hits.total == 0
+        } else {
+            found.hits.total > 0 || self.filters.query.text.is_empty()
+        };
+        if keep {
             self.progress.hits += u64::from(found.hits.total);
             self.progress.matched += 1;
             self.files.push(found);

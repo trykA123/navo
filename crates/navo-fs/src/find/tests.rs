@@ -2,6 +2,7 @@ mod archives;
 mod depth;
 mod gitignore;
 mod names;
+mod not;
 
 use std::fs::{self, File, FileTimes};
 use std::ops::ControlFlow;
