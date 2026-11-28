@@ -1,5 +1,6 @@
-//! Contract tests for NV12e: bash, zsh, fish, Git Bash and WSL prompt hooks, owner-only
-//! temp init files with RAII cleanup, and POSIX / Git Bash / WSL folder-sync quoting.
+//! Contract tests for NV12e shell hooks: the bash, zsh, fish, Git Bash and WSL init scripts,
+//! owner-only temp init files with RAII cleanup, and nonce containment.
+//! Folder-sync quoting is covered in `quoting`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -7,102 +8,10 @@ use std::sync::Arc;
 use super::Recorder;
 #[cfg(unix)]
 use crate::Size;
-use crate::prompt::{
-    Nonce, PromptSink, PromptState, PtyWriter, ShellHook, SyncWait, quote_sync_command,
-};
+use crate::prompt::{Nonce, PromptSink, PromptState, PtyWriter, ShellHook};
 use crate::shells::ShellSpec;
 use crate::{FakeBackend, FakeHandle, Session, ShellKind, Sink};
 
-const BAD_NAMES: &[&str] = &[
-    "a\nb",
-    "a\rb",
-    "a\0b",
-    "a\x1bb",
-    "a\tb",
-    "a\u{2028}b",
-    "a\u{2029}b",
-    "",
-];
-
-#[test]
-fn posix_shells_quote_with_single_quotes_and_reject_controls() {
-    for kind in [ShellKind::Bash, ShellKind::Zsh, ShellKind::Fish] {
-        assert_eq!(
-            quote_sync_command(kind, Path::new("it's here")),
-            Ok(String::from("cd -- 'it'\\''s here'\r")),
-            "apostrophe quoting for {kind:?}"
-        );
-        assert_eq!(
-            quote_sync_command(kind, Path::new("/home/a b")),
-            Ok(String::from("cd -- '/home/a b'\r")),
-            "space quoting for {kind:?}"
-        );
-        for bad in BAD_NAMES {
-            assert_eq!(
-                quote_sync_command(kind, Path::new(bad)),
-                Err(SyncWait::UnusualName),
-                "expected UnusualName for {bad:?} in {kind:?}"
-            );
-        }
-    }
-}
-
-#[test]
-fn git_bash_converts_windows_paths_then_posix_quotes() {
-    assert_eq!(
-        quote_sync_command(ShellKind::GitBash, Path::new(r"C:\Users\it's here")),
-        Ok(String::from("cd -- '/c/Users/it'\\''s here'\r"))
-    );
-    assert_eq!(
-        quote_sync_command(ShellKind::GitBash, Path::new(r"C:\Users\a b")),
-        Ok(String::from("cd -- '/c/Users/a b'\r"))
-    );
-    assert_eq!(
-        quote_sync_command(ShellKind::GitBash, Path::new("c:/Users/a b")),
-        Ok(String::from("cd -- '/c/Users/a b'\r"))
-    );
-    for bad in BAD_NAMES {
-        assert_eq!(
-            quote_sync_command(ShellKind::GitBash, Path::new(bad)),
-            Err(SyncWait::UnusualName),
-            "expected UnusualName for {bad:?}"
-        );
-    }
-    // UNC, extended-length and non-local paths are unsupported.
-    for bad in [
-        r"\\server\share",
-        r"\\?\C:\Users",
-        "relative/dir",
-        "/unix/path",
-    ] {
-        assert_eq!(
-            quote_sync_command(ShellKind::GitBash, Path::new(bad)),
-            Err(SyncWait::UnusualName),
-            "expected UnusualName for {bad:?}"
-        );
-    }
-}
-
-#[test]
-fn wsl_sync_uses_wslpath_with_posix_quoting() {
-    assert_eq!(
-        quote_sync_command(ShellKind::Wsl, Path::new(r"C:\Users\a b")),
-        Ok(String::from("cd -- \"$(wslpath -u 'C:\\Users\\a b')\"\r"))
-    );
-    assert_eq!(
-        quote_sync_command(ShellKind::Wsl, Path::new(r"C:\Users\it's here")),
-        Ok(String::from(
-            "cd -- \"$(wslpath -u 'C:\\Users\\it'\\''s here')\"\r"
-        ))
-    );
-    for bad in BAD_NAMES {
-        assert_eq!(
-            quote_sync_command(ShellKind::Wsl, Path::new(bad)),
-            Err(SyncWait::UnusualName),
-            "expected UnusualName for {bad:?}"
-        );
-    }
-}
 const TEST_NONCE: &str = "0123456789abcdef0123456789abcdef";
 const WRONG_NONCE: &str = "fedcba9876543210fedcba9876543210";
 #[cfg(unix)]
@@ -132,7 +41,8 @@ fn read_init(hook: &ShellHook) -> String {
 
 fn expected_bash_block() -> String {
     format!(
-        "__navo_nonce='{TEST_NONCE}'\n\
+        "unset __navo_nonce\n\
+         __navo_nonce='{TEST_NONCE}'\n\
          __navo_prompt() {{ printf '\\033]133;A;navo=%s\\033\\\\' \"$__navo_nonce\"; }}\n\
          if [ -n \"${{PROMPT_COMMAND:-}}\" ]; then\n\
            PROMPT_COMMAND=\"$PROMPT_COMMAND\"$'\\n'\"__navo_prompt\"\n\
@@ -147,6 +57,22 @@ fn expected_bash_script() -> String {
         "# Navo terminal integration (temporary file; removed after the first prompt).\n\
          if [ -f \"$HOME/.bashrc\" ]; then . \"$HOME/.bashrc\"; fi\n\
          unset __NAVO_INIT __NAVO_ZDOTDIR\n\
+         {block}",
+        block = expected_bash_block()
+    )
+}
+
+fn expected_login_bash_script() -> String {
+    format!(
+        "# Navo terminal integration for a login bash (temporary; removed after the first prompt).\n\
+         # Replaces --login: performs the login startup itself, then installs the prompt hook.\n\
+         if [ -f /etc/profile ]; then . /etc/profile; fi\n\
+         __navo_profile=''\n\
+         for __navo_f in \"$HOME/.bash_profile\" \"$HOME/.bash_login\" \"$HOME/.profile\"; do\n\
+           if [ -f \"$__navo_f\" ]; then . \"$__navo_f\"; __navo_profile=1; break; fi\n\
+         done\n\
+         if [ -z \"$__navo_profile\" ] && [ -f \"$HOME/.bashrc\" ]; then . \"$HOME/.bashrc\"; fi\n\
+         unset __navo_f __navo_profile __NAVO_INIT __NAVO_ZDOTDIR\n\
          {block}",
         block = expected_bash_block()
     )
@@ -196,6 +122,7 @@ fn zsh_hook_uses_private_zdotdir_and_precmd() {
          fi\n\
          unset __NAVO_INIT __NAVO_ZDOTDIR\n\
          if [ -f \"${{ZDOTDIR:-$HOME}}/.zshrc\" ]; then . \"${{ZDOTDIR:-$HOME}}/.zshrc\"; fi\n\
+         unset __navo_nonce\n\
          __navo_nonce='{TEST_NONCE}'\n\
          __navo_prompt() {{ printf '\\033]133;A;navo=%s\\033\\\\' \"$__navo_nonce\"; }}\n\
          precmd_functions+=(__navo_prompt)\n"
@@ -204,7 +131,7 @@ fn zsh_hook_uses_private_zdotdir_and_precmd() {
 
     // Early startup files are forwarded, not hidden by the temporary ZDOTDIR.
     let dir = path.parent().unwrap();
-    for name in [".zshenv", ".zprofile"] {
+    for name in [".zshenv", ".zprofile", ".zlogin"] {
         let forwarded = format!(
             "# Navo terminal integration (temporary ZDOTDIR; removed after the first prompt).\n\
              __navo_zdotdir=\"$ZDOTDIR\"\n\
@@ -236,6 +163,7 @@ fn fish_hook_sources_temp_file_and_wraps_fish_prompt() {
         "# Navo terminal integration (temporary file; removed after the first prompt).\n\
          # fish reads the user's config.fish before --init-command runs, so it is already restored.\n\
          set -e __NAVO_INIT __NAVO_ZDOTDIR\n\
+         set -e __navo_nonce\n\
          set -g __navo_nonce '{TEST_NONCE}'\n\
          if functions -q fish_prompt\n\
              functions -c fish_prompt __navo_user_prompt\n\
@@ -265,20 +193,31 @@ fn git_bash_hook_replaces_login_args_and_emulates_login_startup() {
             String::from("-i")
         ]
     );
-    let expected = format!(
-        "# Navo terminal integration for Git Bash (temporary; removed after the first prompt).\n\
-         # Replaces --login: performs the login startup itself, then installs the prompt hook.\n\
-         if [ -f /etc/profile ]; then . /etc/profile; fi\n\
-         __navo_profile=''\n\
-         for __navo_f in \"$HOME/.bash_profile\" \"$HOME/.bash_login\" \"$HOME/.profile\"; do\n\
-           if [ -f \"$__navo_f\" ]; then . \"$__navo_f\"; __navo_profile=1; break; fi\n\
-         done\n\
-         if [ -z \"$__navo_profile\" ] && [ -f \"$HOME/.bashrc\" ]; then . \"$HOME/.bashrc\"; fi\n\
-         unset __navo_f __navo_profile __NAVO_INIT __NAVO_ZDOTDIR\n\
-         {block}",
-        block = expected_bash_block()
-    );
-    assert_eq!(read_init(&hook), expected);
+    assert_eq!(read_init(&hook), expected_login_bash_script());
+}
+
+#[test]
+fn bash_hook_replaces_login_args_and_emulates_login_startup() {
+    for flag in ["--login", "-l"] {
+        let hook = hook_for(ShellKind::Bash, &[flag, "-i"]);
+        let path = init_path(&hook);
+        assert!(hook.replaces_args(), "{flag} must replace the arguments");
+        assert_eq!(
+            hook.args(),
+            [
+                String::from("--init-file"),
+                path.display().to_string(),
+                String::from("-i")
+            ],
+            "{flag} must not survive on the command line"
+        );
+        assert!(
+            hook.env()
+                .iter()
+                .any(|(key, value)| key == "__NAVO_INIT" && value == &path.display().to_string())
+        );
+        assert_eq!(read_init(&hook), expected_login_bash_script());
+    }
 }
 
 #[test]

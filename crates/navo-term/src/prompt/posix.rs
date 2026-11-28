@@ -12,9 +12,13 @@ use super::{Nonce, SyncWait};
 use crate::shells::ShellSpec;
 
 /// bash (also the WSL guest shell): `--init-file` replaces `~/.bashrc`, so source it first.
+/// bash ignores `--init-file` in a login shell, so `--login`/`-l` is replaced and emulated.
 pub(super) fn bash_hook(shell: &ShellSpec, nonce: &Nonce) -> Option<ShellHook> {
     if has_flag(&shell.args, &["-c", "--norc", "--rcfile", "--init-file"]) {
         return None;
+    }
+    if has_flag(&shell.args, &["--login", "-l"]) {
+        return login_bash_hook(nonce);
     }
     let init = temp_init(&[("init.bash", &bash_script(nonce))])?;
     let file = clean_shell_path(init.file())?.to_owned();
@@ -32,19 +36,29 @@ pub(super) fn git_bash_hook(shell: &ShellSpec, nonce: &Nonce) -> Option<ShellHoo
     if has_flag(&shell.args, &["-c", "--norc", "--rcfile", "--init-file"]) {
         return None;
     }
-    let init = temp_init(&[("init.bash", &git_bash_script(nonce))])?;
-    let file = clean_shell_path(init.file())?.to_owned();
+    login_bash_hook(nonce)
+}
+
+/// The login-emulating bash hook shared by `bash --login`/`-l` and Git Bash: the login flags
+/// are dropped (bash ignores `--init-file` for them) and the init file sources the profile.
+fn login_bash_hook(nonce: &Nonce) -> Option<ShellHook> {
+    let init = temp_init(&[("init.bash", &login_bash_script(nonce))])?;
+    let file = init_file_env(&init)?;
     Some(ShellHook {
-        extra_args: vec![String::from("--init-file"), file, String::from("-i")],
-        extra_env: vec![(String::from("__NAVO_INIT"), init_file_env(&init)?)],
+        extra_args: vec![
+            String::from("--init-file"),
+            file.clone(),
+            String::from("-i"),
+        ],
+        extra_env: vec![(String::from("__NAVO_INIT"), file)],
         replace_args: true,
         init: Some(init),
     })
 }
 
 /// zsh: a temporary `ZDOTDIR` whose `.zshrc` restores the original `ZDOTDIR` (or `$HOME`),
-/// sources the user's `.zshrc` and appends a `precmd` hook. `.zshenv` and `.zprofile` are
-/// forwarded too, so the temporary `ZDOTDIR` never hides the user's early startup files.
+/// sources the user's `.zshrc` and appends a `precmd` hook. `.zshenv`, `.zprofile` and
+/// `.zlogin` are forwarded too, so the temporary `ZDOTDIR` hides no user startup file.
 pub(super) fn zsh_hook(shell: &ShellSpec, nonce: &Nonce) -> Option<ShellHook> {
     if has_flag(&shell.args, &["-c", "-f", "--no-rcs"]) {
         return None;
@@ -53,6 +67,7 @@ pub(super) fn zsh_hook(shell: &ShellSpec, nonce: &Nonce) -> Option<ShellHook> {
         (".zshrc", &zsh_script(nonce)),
         (".zshenv", &zsh_forward_script(".zshenv")),
         (".zprofile", &zsh_forward_script(".zprofile")),
+        (".zlogin", &zsh_forward_script(".zlogin")),
     ])?;
     let dir = clean_shell_path(init.dir())?.to_owned();
     let original = std::env::var("ZDOTDIR").unwrap_or_default();
@@ -139,22 +154,32 @@ pub(super) fn posix_escape(text: &str) -> String {
     text.replace('\'', "'\\''")
 }
 
-/// `C:\Users\a b` or `c:/Users/a b` -> `/c/Users/a b`; UNC, extended-length (`\\?\`),
-/// drive-relative and non-local paths are unsupported.
+/// `C:\Users\a b` or `c:/Users/a b` -> `/c/Users/a b`, `C:\` -> `/c`; UNC, extended-length
+/// (`\\?\`), drive-relative (`C:foo`, `C:`) and non-local paths are unsupported.
 fn to_git_bash_path(text: &str) -> Option<String> {
     let drive = text.chars().next()?.to_ascii_lowercase();
     if !drive.is_ascii_alphabetic() || text.as_bytes().get(1) != Some(&b':') {
         return None;
     }
-    let rest = text.get(2..)?;
-    Some(format!("/{drive}{}", rest.replace('\\', "/")))
+    // Only `X:\` and `X:/` are absolute; `C:foo` and `C:` resolve against the shell's cwd.
+    if !matches!(text.as_bytes().get(2), Some(b'\\' | b'/')) {
+        return None;
+    }
+    let tail = text.get(2..)?.replace('\\', "/");
+    let tail = tail.trim_matches('/');
+    Some(if tail.is_empty() {
+        format!("/{drive}")
+    } else {
+        format!("/{drive}/{tail}")
+    })
 }
 
-/// The shared bash tail: non-exported nonce plus a `PROMPT_COMMAND` entry emitting the
+/// The shared bash tail: a never-exported nonce plus a `PROMPT_COMMAND` entry emitting the
 /// trusted prompt marker. Appending keeps any existing `PROMPT_COMMAND` working.
 fn bash_prompt_block(nonce: &Nonce) -> String {
     format!(
-        "__navo_nonce='{nonce}'\n\
+        "unset __navo_nonce\n\
+         __navo_nonce='{nonce}'\n\
          __navo_prompt() {{ printf '\\033]133;A;navo=%s\\033\\\\' \"$__navo_nonce\"; }}\n\
          if [ -n \"${{PROMPT_COMMAND:-}}\" ]; then\n\
            PROMPT_COMMAND=\"$PROMPT_COMMAND\"$'\\n'\"__navo_prompt\"\n\
@@ -175,9 +200,9 @@ fn bash_script(nonce: &Nonce) -> String {
     )
 }
 
-fn git_bash_script(nonce: &Nonce) -> String {
+fn login_bash_script(nonce: &Nonce) -> String {
     format!(
-        "# Navo terminal integration for Git Bash (temporary; removed after the first prompt).\n\
+        "# Navo terminal integration for a login bash (temporary; removed after the first prompt).\n\
          # Replaces --login: performs the login startup itself, then installs the prompt hook.\n\
          if [ -f /etc/profile ]; then . /etc/profile; fi\n\
          __navo_profile=''\n\
@@ -201,6 +226,7 @@ fn zsh_script(nonce: &Nonce) -> String {
          fi\n\
          unset __NAVO_INIT __NAVO_ZDOTDIR\n\
          if [ -f \"${{ZDOTDIR:-$HOME}}/.zshrc\" ]; then . \"${{ZDOTDIR:-$HOME}}/.zshrc\"; fi\n\
+         unset __navo_nonce\n\
          __navo_nonce='{nonce}'\n\
          __navo_prompt() {{ printf '\\033]133;A;navo=%s\\033\\\\' \"$__navo_nonce\"; }}\n\
          precmd_functions+=(__navo_prompt)\n",
@@ -213,6 +239,7 @@ fn fish_script(nonce: &Nonce) -> String {
         "# Navo terminal integration (temporary file; removed after the first prompt).\n\
          # fish reads the user's config.fish before --init-command runs, so it is already restored.\n\
          set -e __NAVO_INIT __NAVO_ZDOTDIR\n\
+         set -e __navo_nonce\n\
          set -g __navo_nonce '{nonce}'\n\
          if functions -q fish_prompt\n\
              functions -c fish_prompt __navo_user_prompt\n\

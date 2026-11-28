@@ -3,6 +3,7 @@ mod close;
 mod grid;
 mod hooks;
 mod prompt;
+mod quoting;
 mod session;
 mod shells;
 #[cfg(windows)]
