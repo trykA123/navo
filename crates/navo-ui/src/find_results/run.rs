@@ -36,6 +36,19 @@ impl Drop for FindRun {
     }
 }
 
+#[cfg(test)]
+impl FindRun {
+    /// Builds a run directly around a test receiver without spawning a background job.
+    pub(crate) fn from_receiver(receive: Receiver<RunEvent>) -> Self {
+        let owner = Pools::shared().queue(JobKind::Find).owner();
+        Self {
+            receive,
+            cancel: CancelToken::new(),
+            _owner: owner,
+        }
+    }
+}
+
 /// Resolves the roots and starts one find job that walks them in order.
 ///
 /// Returns the run and the resolved roots. Each walk sees the query with `within` cleared, so
