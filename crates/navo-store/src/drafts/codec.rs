@@ -220,26 +220,40 @@ fn compute_checksum(
     *hasher.finalize().as_bytes()
 }
 
-/// Lexically normalizes a path into stable bytes without touching the filesystem.
-fn normalize_lexical_bytes(target: &Path) -> Vec<u8> {
-    let mut stack: Vec<Vec<u8>> = Vec::new();
-    for component in target.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => match stack.last().map(Vec::as_slice) {
-                Some(b"..") | None => stack.push(b"..".to_vec()),
-                Some(b"/") => {}
-                Some(_) => {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum NormPart {
+    Prefix(Vec<u8>),
+    Root,
+    Parent,
+    Normal(Vec<u8>),
+}
+
+/// Normalizes ASCII drive letters in a Windows path prefix (`c:` -> `C:`, `\\?\c:` -> `\\?\C:`).
+pub(super) fn normalize_prefix_bytes(raw: &[u8]) -> Vec<u8> {
+    let mut out = raw.to_vec();
+    if out.len() == 2 && out[1] == b':' {
+        out[0] = out[0].to_ascii_uppercase();
+    } else if out.len() == 6 && out.starts_with(br"\\?\") && out[5] == b':' {
+        out[4] = out[4].to_ascii_uppercase();
+    }
+    out
+}
+
+/// Folds normalized path components into stable NUL-separated bytes without ever popping a prefix.
+pub(super) fn fold_norm_parts(parts: impl IntoIterator<Item = NormPart>) -> Vec<u8> {
+    let mut stack: Vec<NormPart> = Vec::new();
+    for part in parts {
+        match part {
+            NormPart::Parent => match stack.last() {
+                Some(NormPart::Normal(_)) => {
                     stack.pop();
                 }
+                Some(NormPart::Root) => {}
+                Some(NormPart::Prefix(_) | NormPart::Parent) | None => {
+                    stack.push(NormPart::Parent);
+                }
             },
-            Component::RootDir => stack.push(b"/".to_vec()),
-            Component::Prefix(prefix) => {
-                stack.push(prefix.as_os_str().as_encoded_bytes().to_vec());
-            }
-            Component::Normal(part) => {
-                stack.push(part.as_encoded_bytes().to_vec());
-            }
+            other => stack.push(other),
         }
     }
     let mut out = Vec::new();
@@ -247,7 +261,25 @@ fn normalize_lexical_bytes(target: &Path) -> Vec<u8> {
         if idx > 0 {
             out.push(0);
         }
-        out.extend_from_slice(part);
+        match part {
+            NormPart::Prefix(bytes) | NormPart::Normal(bytes) => out.extend_from_slice(bytes),
+            NormPart::Root => out.push(b'/'),
+            NormPart::Parent => out.extend_from_slice(b".."),
+        }
     }
     out
+}
+
+/// Lexically normalizes a path into stable bytes without touching the filesystem.
+fn normalize_lexical_bytes(target: &Path) -> Vec<u8> {
+    let parts = target.components().filter_map(|component| match component {
+        Component::CurDir => None,
+        Component::ParentDir => Some(NormPart::Parent),
+        Component::RootDir => Some(NormPart::Root),
+        Component::Prefix(prefix) => Some(NormPart::Prefix(normalize_prefix_bytes(
+            prefix.as_os_str().as_encoded_bytes(),
+        ))),
+        Component::Normal(part) => Some(NormPart::Normal(part.as_encoded_bytes().to_vec())),
+    });
+    fold_norm_parts(parts)
 }

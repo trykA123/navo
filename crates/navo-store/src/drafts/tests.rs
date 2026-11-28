@@ -308,3 +308,33 @@ fn debounce_policy_waits_one_second_and_resets_on_edits() {
     assert!(!debounce.is_due(t0 + Duration::from_secs(10)));
     assert_eq!(debounce.due_at(), None);
 }
+
+#[test]
+fn lexical_normalization_preserves_prefix_and_normalizes_drive_case() {
+    use super::codec::{NormPart, canonical_key, fold_norm_parts, normalize_prefix_bytes};
+
+    // ParentDir after a Windows drive prefix must preserve Prefix("C:") and push "..",
+    // never popping the prefix and colliding with plain relative "foo".
+    let drive_parent_foo = fold_norm_parts([
+        NormPart::Prefix(normalize_prefix_bytes(b"c:")),
+        NormPart::Parent,
+        NormPart::Normal(b"foo".to_vec()),
+    ]);
+    let rel_foo = fold_norm_parts([NormPart::Normal(b"foo".to_vec())]);
+    assert_ne!(drive_parent_foo, rel_foo);
+    assert_eq!(drive_parent_foo, b"C:\0..\0foo");
+
+    // Drive letters normalize to uppercase (`c:` == `C:`, `\\?\c:` == `\\?\C:`).
+    assert_eq!(normalize_prefix_bytes(b"c:"), b"C:");
+    assert_eq!(normalize_prefix_bytes(br"\\?\c:"), br"\\?\C:");
+
+    // Equivalent lexical Unix paths produce identical draft keys.
+    assert_eq!(
+        canonical_key(Path::new("/work/src/../src/./main.rs")),
+        canonical_key(Path::new("/work/src/main.rs"))
+    );
+    assert_eq!(
+        canonical_key(Path::new("/work/src/")),
+        canonical_key(Path::new("/work/src"))
+    );
+}
