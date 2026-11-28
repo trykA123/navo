@@ -173,3 +173,102 @@ fn read_errors_propagate() {
     let compiled = Compiled::new(&FindQuery::parse("x")).unwrap();
     assert!(scan(Broken, &compiled, &AtomicBool::new(false)).is_err());
 }
+
+#[test]
+fn word_plain_matches_whole_words_only() {
+    let found = search(b"a foo b\nfoo(1)\nfoobar barfoo foo_bar", "foo word:on");
+    assert_eq!(found.total, 2);
+    assert_eq!(found.hits[0].line, 1);
+    assert_eq!(found.hits[0].column, 3);
+    assert_eq!(found.hits[1].line, 2);
+    assert_eq!(found.hits[1].column, 1);
+
+    let escaped = search(b"a foo.bar b\na fooXbar b\nfoo.barz", "foo.bar word:on");
+    assert_eq!(escaped.total, 1);
+    assert_eq!(escaped.hits[0].line, 1);
+    assert_eq!(escaped.hits[0].column, 3);
+}
+
+#[test]
+fn word_respects_case_flag() {
+    let folded = search(b"FOO Foo foo foobar", "foo word:on");
+    assert_eq!(folded.total, 3);
+    assert_eq!(folded.hits[0].column, 1);
+    assert_eq!(folded.hits[1].column, 5);
+    assert_eq!(folded.hits[2].column, 9);
+
+    let exact = search(b"FOO Foo foo foobar", "foo word:on case:on");
+    assert_eq!(exact.total, 1);
+    assert_eq!(exact.hits[0].column, 9);
+
+    let unicode = search("É é élan".as_bytes(), "é word:on");
+    assert_eq!(unicode.total, 2);
+}
+
+#[test]
+fn word_combines_with_regex() {
+    let alt = search(b"foo bar foobar xbar", "re:foo|bar word:on");
+    assert_eq!(alt.total, 2);
+    assert_eq!(alt.hits[0].column, 1);
+    assert_eq!(alt.hits[1].column, 5);
+
+    let folded = search(b"fao FOO faox xfoo", "re:f.o word:on");
+    assert_eq!(folded.total, 2);
+
+    let exact = search(b"fao FOO faox xfoo", "re:f.o word:on case:on");
+    assert_eq!(exact.total, 1);
+    assert_eq!(exact.hits[0].column, 1);
+
+    let invalid = FindQuery {
+        text: "[".into(),
+        regex: true,
+        word: true,
+        ..FindQuery::default()
+    };
+    assert!(Compiled::new(&invalid).is_err());
+}
+
+#[test]
+fn combination_errors_reject_invalid_token_pairs() {
+    assert_eq!(
+        Compiled::new(&FindQuery::parse("not:on")).err().as_deref(),
+        Some("not: needs text to look for")
+    );
+    assert_eq!(
+        Compiled::new(&FindQuery::parse("not:on ext:rs"))
+            .err()
+            .as_deref(),
+        Some("not: needs text to look for")
+    );
+    assert_eq!(
+        Compiled::new(&FindQuery::parse("hex:4D5A hello"))
+            .err()
+            .as_deref(),
+        Some("hex: cannot be combined with text")
+    );
+    assert_eq!(
+        Compiled::new(&FindQuery::parse("hex:4D5A re:foo"))
+            .err()
+            .as_deref(),
+        Some("hex: cannot be combined with re: or word:")
+    );
+    let hex_regex_only = FindQuery {
+        hex: Some(vec![0x4d, 0x5a]),
+        regex: true,
+        ..FindQuery::default()
+    };
+    assert_eq!(
+        Compiled::new(&hex_regex_only).err().as_deref(),
+        Some("hex: cannot be combined with re: or word:")
+    );
+    assert_eq!(
+        Compiled::new(&FindQuery::parse("hex:4D5A word:on"))
+            .err()
+            .as_deref(),
+        Some("hex: cannot be combined with re: or word:")
+    );
+
+    assert!(Compiled::new(&FindQuery::parse("not:on hello")).is_ok());
+    assert!(Compiled::new(&FindQuery::parse("hex:4D5A")).is_ok());
+    assert_eq!(search(b"anything\n", "word:on").total, 0);
+}

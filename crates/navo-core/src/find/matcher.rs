@@ -27,23 +27,10 @@ enum Kind {
 }
 
 impl Compiled {
+    /// Compiles a find query into a matcher, rejecting invalid token combinations.
     pub fn new(query: &FindQuery) -> Result<Self, String> {
-        let kind = if query.text.is_empty() {
-            Kind::Empty
-        } else if query.regex {
-            Kind::Regex(
-                RegexBuilder::new(&query.text)
-                    .case_insensitive(!query.case)
-                    .build()
-                    .map_err(|error| error.to_string())?,
-            )
-        } else if query.case {
-            Kind::Literal(query.text.as_bytes().to_vec())
-        } else {
-            Kind::Fold(
-                AhoCorasick::new([query.text.to_lowercase()]).map_err(|error| error.to_string())?,
-            )
-        };
+        validate_query(query)?;
+        let kind = compile_kind(query)?;
         let name = query.name.as_deref().map(NameFilter::new).transpose()?;
         Ok(Self { kind, name })
     }
@@ -66,6 +53,45 @@ impl Compiled {
             Kind::Fold(matcher) => visit_folded(matcher, text, visit),
         }
     }
+}
+
+fn validate_query(query: &FindQuery) -> Result<(), String> {
+    if query.hex.is_some() {
+        if query.regex || query.word {
+            return Err("hex: cannot be combined with re: or word:".to_owned());
+        }
+        if !query.text.is_empty() {
+            return Err("hex: cannot be combined with text".to_owned());
+        }
+    }
+    if query.invert && query.text.is_empty() {
+        return Err("not: needs text to look for".to_owned());
+    }
+    Ok(())
+}
+
+fn compile_kind(query: &FindQuery) -> Result<Kind, String> {
+    if query.text.is_empty() {
+        return Ok(Kind::Empty);
+    }
+    if query.word || query.regex {
+        let pattern = match (query.word, query.regex) {
+            (false, _) => Cow::Borrowed(query.text.as_str()),
+            (true, true) => Cow::Owned(format!(r"\b(?:{})\b", query.text)),
+            (true, false) => Cow::Owned(format!(r"\b(?:{})\b", regex::escape(&query.text))),
+        };
+        return RegexBuilder::new(&pattern)
+            .case_insensitive(!query.case)
+            .build()
+            .map(Kind::Regex)
+            .map_err(|error| error.to_string());
+    }
+    if query.case {
+        return Ok(Kind::Literal(query.text.as_bytes().to_vec()));
+    }
+    AhoCorasick::new([query.text.to_lowercase()])
+        .map(Kind::Fold)
+        .map_err(|error| error.to_string())
 }
 
 fn visit_folded(matcher: &AhoCorasick, text: &str, mut visit: impl FnMut(usize) -> bool) {
