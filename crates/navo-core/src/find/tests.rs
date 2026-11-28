@@ -5,4 +5,5 @@ mod matcher;
 mod names;
 mod print;
 mod query;
+mod spans;
 mod tokens;

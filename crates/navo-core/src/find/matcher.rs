@@ -13,6 +13,7 @@ use decode::{Decoders, bom_len, snippet};
 
 mod bytes;
 mod decode;
+mod spans;
 
 #[cfg(test)]
 pub(in crate::find) use decode::{chunk_growths, reset_chunk_growths};
