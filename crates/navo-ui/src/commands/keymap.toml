@@ -47,6 +47,10 @@ keys = ["ctrl-shift-b"]
 command = "terminal.toggle"
 keys = ["ctrl-`"]
 
+[[bind]]
+command = "find_results.focus"
+keys = ["ctrl-shift-j"]
+
 # NavoPane
 
 [[bind]]
@@ -2430,3 +2434,123 @@ context = "ButtonBarEditor"
 command = "button_bar_editor.done"
 keys = ["escape"]
 context = "ButtonBarEditor"
+
+# FindResults
+
+[[bind]]
+command = "find_results.up"
+keys = ["up"]
+
+[[bind]]
+command = "find_results.down"
+keys = ["down"]
+
+[[bind]]
+command = "find_results.page_up"
+keys = ["pageup"]
+
+[[bind]]
+command = "find_results.page_down"
+keys = ["pagedown"]
+
+[[bind]]
+command = "find_results.first"
+keys = ["home"]
+
+[[bind]]
+command = "find_results.last"
+keys = ["end"]
+
+[[bind]]
+command = "find_results.reveal"
+keys = ["enter"]
+
+[[bind]]
+command = "find_results.reveal_and_leave"
+keys = ["shift-enter"]
+
+[[bind]]
+command = "find_results.back_to_navo"
+keys = ["ctrl-shift-j"]
+
+[[bind]]
+command = "find_results.copy"
+keys = ["f5"]
+
+[[bind]]
+command = "find_results.move"
+keys = ["f6"]
+
+[[bind]]
+command = "find_results.swap_target"
+keys = ["ctrl-u"]
+
+[[bind]]
+command = "find_results.view"
+keys = ["f3"]
+
+[[bind]]
+command = "find_results.mark"
+keys = ["space"]
+
+[[bind]]
+command = "find_results.open_as_pane_tab"
+keys = ["ctrl-shift-enter"]
+
+[[bind]]
+command = "find_results.next_tab"
+keys = ["ctrl-tab"]
+
+[[bind]]
+command = "find_results.previous_tab"
+keys = ["ctrl-shift-tab"]
+
+[[bind]]
+command = "find_results.new_tab"
+keys = ["ctrl-t"]
+
+[[bind]]
+command = "find_results.close_tab"
+keys = ["ctrl-w"]
+
+[[bind]]
+command = "find_results.edit_query"
+keys = ["ctrl-l"]
+
+[[bind]]
+command = "find_results.run_again"
+keys = ["ctrl-r"]
+
+[[bind]]
+command = "find_results.run_again"
+keys = ["enter"]
+context = "FindResults > Input"
+
+[[bind]]
+command = "find_results.toggle_case"
+keys = ["alt-c"]
+
+[[bind]]
+command = "find_results.toggle_regex"
+keys = ["alt-r"]
+
+[[bind]]
+command = "find_results.toggle_groups"
+keys = ["alt-g"]
+
+[[bind]]
+command = "find_results.toggle_lines"
+keys = ["alt-h"]
+
+[[bind]]
+command = "find_results.keep"
+keys = ["ctrl-s"]
+
+[[bind]]
+command = "find_results.stop"
+keys = ["escape"]
+
+[[bind]]
+command = "find_results.stop"
+keys = ["escape"]
+context = "FindResults > Input"

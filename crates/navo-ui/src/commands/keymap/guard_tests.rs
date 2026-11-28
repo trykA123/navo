@@ -6,7 +6,7 @@ use crate::commands::bind::predicate_of;
 use crate::commands::focus_paths::{Reach, knows, screen_reach};
 
 /// Outer commands that a focused part is meant to take over.
-const YIELDS: [&str; 12] = [
+const YIELDS: [&str; 13] = [
     "viewer.line_up",
     "viewer.line_down",
     "viewer.scroll_left",
@@ -19,6 +19,7 @@ const YIELDS: [&str; 12] = [
     "settings.row_down",
     "settings.edit_value",
     "settings.close",
+    "find_results.reveal",
 ];
 
 /// Contexts that type into a filter, so they may shadow single characters and Backspace.
@@ -65,7 +66,7 @@ enum Allow {
     },
 }
 
-const ALLOW: [Allow; 8] = [
+const ALLOW: [Allow; 9] = [
     // Esc leaves the Markdown preview before the viewer closes.
     Allow::Wins {
         key: "escape",
@@ -108,6 +109,12 @@ const ALLOW: [Allow; 8] = [
         key: "ctrl-shift-v",
         first: ("multi_rename.paste_names", "MultiRename"),
         second: ("clipboard.open", "!Viewer && !Terminal"),
+    },
+    // Ctrl+Shift+J in the find-results window switches focus back to Navo.
+    Allow::Pair {
+        key: "ctrl-shift-j",
+        first: ("find_results.focus", GLOBAL),
+        second: ("find_results.back_to_navo", "FindResults"),
     },
 ];
 

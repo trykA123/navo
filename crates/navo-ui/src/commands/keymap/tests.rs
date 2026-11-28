@@ -13,13 +13,13 @@ fn error_of(text: &str) -> Option<KeymapError> {
 fn the_built_in_keymap_parses_and_validates() {
     let parsed = Keymap::parse(builtin());
     assert_eq!(parsed.as_ref().err(), None);
-    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(593));
+    assert_eq!(parsed.map(|keymap| keymap.binds().len()), Ok(623));
 }
 
 #[test]
 fn the_built_in_keymap_is_parsed_once() {
     assert!(std::ptr::eq(Keymap::builtin(), Keymap::builtin()));
-    assert_eq!(Keymap::builtin().binds().len(), 593);
+    assert_eq!(Keymap::builtin().binds().len(), 623);
 }
 
 #[test]
@@ -432,4 +432,91 @@ fn visible_compare_menu_opens_with_shift_f10_and_the_menu_key() {
         .flat_map(|(_, _, keys)| keys)
         .collect();
     assert_eq!(keys, ["menu", "shift-f10"]);
+}
+
+#[gpui_kit::test]
+fn find_results_keys_resolve_in_file_list_and_find_results(cx: &mut gpui_kit::TestAppContext) {
+    use gpui_kit::KeyContext;
+
+    use crate::commands::for_action;
+    use crate::host_os::parse_keystroke;
+
+    let resolve = |cx: &mut gpui_kit::TestAppContext, contexts: &[&str], key: &str| {
+        let stack: Vec<KeyContext> = contexts
+            .iter()
+            .map(|name| {
+                let mut ctx = KeyContext::default();
+                ctx.add(*name);
+                ctx
+            })
+            .collect();
+        let stroke = parse_keystroke(key).expect("keystroke");
+        cx.update(|cx| {
+            let keymap = cx.key_bindings();
+            let keymap = keymap.borrow();
+            let (matched, _) = keymap.bindings_for_input(&[stroke], &stack);
+            matched
+                .into_iter()
+                .next()
+                .and_then(|binding| for_action(binding.action().name()))
+                .map(|spec| spec.name)
+        })
+    };
+
+    cx.update(crate::window_view::bind_app_keys);
+
+    assert_eq!(
+        resolve(cx, &["NavoPane", "FileList"], "ctrl-shift-j"),
+        Some("find_results.focus")
+    );
+    assert_eq!(
+        resolve(cx, &["FindResults"], "ctrl-shift-j"),
+        Some("find_results.back_to_navo")
+    );
+
+    let cases = [
+        ("up", "find_results.up"),
+        ("down", "find_results.down"),
+        ("pageup", "find_results.page_up"),
+        ("pagedown", "find_results.page_down"),
+        ("home", "find_results.first"),
+        ("end", "find_results.last"),
+        ("enter", "find_results.reveal"),
+        ("shift-enter", "find_results.reveal_and_leave"),
+        ("ctrl-shift-j", "find_results.back_to_navo"),
+        ("f5", "find_results.copy"),
+        ("f6", "find_results.move"),
+        ("ctrl-u", "find_results.swap_target"),
+        ("f3", "find_results.view"),
+        ("space", "find_results.mark"),
+        ("ctrl-shift-enter", "find_results.open_as_pane_tab"),
+        ("ctrl-tab", "find_results.next_tab"),
+        ("ctrl-shift-tab", "find_results.previous_tab"),
+        ("ctrl-t", "find_results.new_tab"),
+        ("ctrl-w", "find_results.close_tab"),
+        ("ctrl-l", "find_results.edit_query"),
+        ("ctrl-r", "find_results.run_again"),
+        ("alt-c", "find_results.toggle_case"),
+        ("alt-r", "find_results.toggle_regex"),
+        ("alt-g", "find_results.toggle_groups"),
+        ("alt-h", "find_results.toggle_lines"),
+        ("ctrl-s", "find_results.keep"),
+        ("escape", "find_results.stop"),
+    ];
+    for (key, expected) in cases {
+        assert_eq!(
+            resolve(cx, &["FindResults"], key),
+            Some(expected),
+            "FindResults key {key}"
+        );
+    }
+
+    assert_eq!(
+        resolve(cx, &["FindResults", "Input"], "enter"),
+        Some("find_results.run_again")
+    );
+    assert_eq!(
+        resolve(cx, &["FindResults", "Input"], "escape"),
+        Some("find_results.stop")
+    );
 }

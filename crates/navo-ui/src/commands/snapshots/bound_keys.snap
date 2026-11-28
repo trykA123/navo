@@ -309,6 +309,36 @@ find.result_down | down | FindAll
 find.result_up | up | CompareOutline
 find.result_up | up | FindAll
 find.selection | ctrl-f3 | Viewer
+find_results.back_to_navo | ctrl-shift-j | FindResults
+find_results.close_tab | ctrl-w | FindResults
+find_results.copy | f5 | FindResults
+find_results.down | down | FindResults
+find_results.edit_query | ctrl-l | FindResults
+find_results.first | home | FindResults
+find_results.focus | ctrl-shift-j | global
+find_results.keep | ctrl-s | FindResults
+find_results.last | end | FindResults
+find_results.mark | space | FindResults
+find_results.move | f6 | FindResults
+find_results.new_tab | ctrl-t | FindResults
+find_results.next_tab | ctrl-tab | FindResults
+find_results.open_as_pane_tab | ctrl-shift-enter | FindResults
+find_results.page_down | pagedown | FindResults
+find_results.page_up | pageup | FindResults
+find_results.previous_tab | ctrl-shift-tab | FindResults
+find_results.reveal | enter | FindResults
+find_results.reveal_and_leave | shift-enter | FindResults
+find_results.run_again | ctrl-r | FindResults
+find_results.run_again | enter | FindResults > Input
+find_results.stop | escape | FindResults
+find_results.stop | escape | FindResults > Input
+find_results.swap_target | ctrl-u | FindResults
+find_results.toggle_case | alt-c | FindResults
+find_results.toggle_groups | alt-g | FindResults
+find_results.toggle_lines | alt-h | FindResults
+find_results.toggle_regex | alt-r | FindResults
+find_results.up | up | FindResults
+find_results.view | f3 | FindResults
 git.menu | alt-g | FileList
 help.key_map | f1 | !Terminal
 help.user_guide | shift-f1 | !Terminal

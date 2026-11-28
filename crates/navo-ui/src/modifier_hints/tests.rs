@@ -143,14 +143,14 @@ fn single_modifier_layers_count_the_layers_one_modifier_away() {
             .map(|more| (more.modifier, more.count))
             .collect::<Vec<_>>()
     };
-    assert_eq!(more(Combo::CTRL), [("Shift", 11), ("Alt", 4)]);
-    assert_eq!(more(Combo::SHIFT), [("Ctrl", 11), ("Alt", 2)]);
+    assert_eq!(more(Combo::CTRL), [("Shift", 12), ("Alt", 4)]);
+    assert_eq!(more(Combo::SHIFT), [("Ctrl", 12), ("Alt", 2)]);
     assert_eq!(more(Combo::ALT), [("Shift", 2), ("Ctrl", 4)]);
     assert!(more(Combo::CTRL_SHIFT).is_empty());
     let without_crash = layer_where(Keymap::builtin(), Combo::CTRL, &|spec| {
         spec.action.is_some() && spec.name != "crash_notice.focus"
     });
-    assert_eq!(without_crash.more[0].count, 10);
+    assert_eq!(without_crash.more[0].count, 11);
 }
 
 #[test]
