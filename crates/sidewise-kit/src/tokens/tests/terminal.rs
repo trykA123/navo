@@ -150,3 +150,15 @@ fn the_scheme_ids_are_stable_and_distinct() {
     assert_eq!(TerminalScheme::ALL.len(), 6);
     assert_eq!(TerminalScheme::Catppuccin.id(), "catppuccin");
 }
+
+#[test]
+fn ansi_and_rgb_helpers_resolve_base_cube_and_greyscale() {
+    let theme = themed(ColorTheme::OpenSea, Mode::Dark);
+    let colors = TerminalColors::follow(Mode::Dark, &theme.colors);
+    assert_eq!(colors.ansi_color(3), colors.ansi[3]);
+    assert_eq!(colors.ansi_color(15), colors.ansi[15]);
+    // Index 196 in the 6x6x6 cube is pure red (255, 0, 0).
+    assert_eq!(colors.ansi_color(196), TerminalColors::rgb_color(255, 0, 0));
+    // Index 232 is the darkest greyscale step (8, 8, 8).
+    assert_eq!(colors.ansi_color(232), TerminalColors::rgb_color(8, 8, 8));
+}

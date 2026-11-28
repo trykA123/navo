@@ -79,6 +79,27 @@ impl TerminalColors {
         }
     }
 
+    /// Resolves any ANSI 256-colour index: 0–15 from the theme's ramp, 16–231 from the
+    /// standard 6×6×6 cube, and 232–255 from the 24-step greyscale ramp.
+    pub fn ansi_color(&self, index: u8) -> Hsla {
+        if let Some(&color) = self.ansi.get(usize::from(index)) {
+            return color;
+        }
+        let (r, g, b) = extended_ansi_rgb(index);
+        Self::rgb_color(r, g, b)
+    }
+
+    /// Converts a literal 24-bit sRGB colour emitted by a terminal program into `Hsla`.
+    pub fn rgb_color(r: u8, g: u8, b: u8) -> Hsla {
+        Rgba {
+            r: f32::from(r) / 255.0,
+            g: f32::from(g) / 255.0,
+            b: f32::from(b) / 255.0,
+            a: 1.0,
+        }
+        .into()
+    }
+
     fn navo(mode: Mode, colors: &Colors) -> Seed {
         let text = Oklch::from_hsla(colors.terminal_text);
         let muted = Oklch::from_hsla(colors.terminal_muted);
@@ -257,6 +278,20 @@ fn satisfies(color: Oklch, grounds: &[Oklch], minimum: f32) -> bool {
     grounds
         .iter()
         .all(|ground| contrast_ratio(color, ground.color()) >= minimum)
+}
+
+/// Converts xterm extended palette indices (16–255) into sRGB triples.
+fn extended_ansi_rgb(index: u8) -> (u8, u8, u8) {
+    const CUBE: [u8; 6] = [0, 95, 135, 175, 215, 255];
+    if index >= 232 {
+        let level = 8u8.saturating_add((index - 232).saturating_mul(10));
+        return (level, level, level);
+    }
+    let offset = index.saturating_sub(16);
+    let r = usize::from(offset / 36);
+    let g = usize::from((offset / 6) % 6);
+    let b = usize::from(offset % 6);
+    (CUBE[r], CUBE[g], CUBE[b])
 }
 
 /// Follow Navo's ANSI ramp: theme hues at fixed lightness, with text and muted filling 0/7/8/15.

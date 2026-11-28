@@ -322,3 +322,38 @@ fn the_sheet_pages_cover_the_passive_pane_on_each_side(cx: &mut TestAppContext) 
     })
     .expect("window");
 }
+
+#[gpui_kit::test]
+fn the_terminal_page_renders_in_both_themes(cx: &mut TestAppContext) {
+    let (window, gallery) = cx.update(|cx| {
+        navo_ui::init(Mode::Light, cx).expect("bundled fonts load");
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds {
+                origin: Point::default(),
+                size: size(px(1280.), px(720.)),
+            })),
+            ..Default::default()
+        };
+        navo_ui::open_window(options, cx, |window, cx| {
+            cx.new(|cx| Gallery::new(Mode::Light, window, cx))
+        })
+        .expect("open the gallery window")
+    });
+    for mode in [Mode::Light, Mode::Dark] {
+        cx.update(|cx| {
+            gallery.update(cx, |gallery, cx| {
+                gallery.set_page(Page::Terminal, cx);
+                gallery.set_mode(mode, cx);
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(
+                window.find("terminal-showcase").visible(),
+                "terminal showcase must be visible in {mode:?}"
+            );
+        })
+        .expect("window");
+        cx.update(|cx| assert_eq!(tokens::current(cx).mode, mode));
+    }
+}

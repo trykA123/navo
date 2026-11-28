@@ -13,6 +13,7 @@ navo-automotive = { path = "../navo-automotive", features = ["sample"] }
 navo-core = { path = "../navo-core" }
 navo-fs = { path = "../navo-fs" }
 navo-pdf = { path = "../navo-pdf" }
+navo-term = { path = "../navo-term" }
 navo-ui = { path = "../navo-ui" }
 
 [dev-dependencies]

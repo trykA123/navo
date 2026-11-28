@@ -205,6 +205,7 @@ pub enum Page {
     SetupNoPayload,
     KeptJobs,
     KeptJobs390,
+    Terminal,
 }
 
 #[derive(Clone, Copy)]

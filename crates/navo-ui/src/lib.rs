@@ -34,6 +34,7 @@ pub mod shortcuts;
 pub mod side_sheet;
 pub mod status_bar;
 pub mod syntax_rules;
+pub mod terminal;
 pub mod window_view;
 
 #[cfg(test)]

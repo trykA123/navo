@@ -34,6 +34,7 @@ use crate::structured_sample::{
     self as structured, CODE, CODE_NAME, MARKDOWN, MARKDOWN_NAME, TABLE, TABLE_NAME, TREE,
     TREE_NAME,
 };
+use crate::terminal_page::TerminalPage;
 use crate::viewer_menu_page::{Shows as ViewerMenuShows, ViewerMenuPage};
 use crate::window_page::WindowPage;
 use crate::window_samples::{
@@ -114,6 +115,7 @@ pub struct Gallery {
     git_badges: [Entity<GitBadgesPage>; 2],
     git_menu: [Entity<GitMenuPage>; 2],
     clip_palettes: [Entity<ClipPalettePage>; crate::clip_palette_page::COUNT],
+    terminal: Entity<TerminalPage>,
     tab: usize,
     clicks: usize,
     scroll: ListScroll,
@@ -180,6 +182,7 @@ impl Gallery {
             git_badges: crate::git_badges_page::pages(cx),
             git_menu: crate::git_menu_page::pages(cx),
             clip_palettes: crate::clip_palette_page::pages(window, cx),
+            terminal: cx.new(TerminalPage::new),
             tab: 1,
             clicks: 0,
             scroll: ListScroll::new(),
@@ -362,6 +365,7 @@ impl Render for Gallery {
             Page::Operate => root.child(self.operate.clone()),
             Page::KeptJobs => root.child(kept_page::page(false, cx)),
             Page::KeptJobs390 => root.child(kept_page::page(true, cx)),
+            Page::Terminal => root.child(self.terminal.clone()),
             Page::Hex => root.child(self.hex.clone()),
             Page::PagedText => root.child(self.paged_text.clone()),
             Page::Drives => root.child(self.drives.clone()),

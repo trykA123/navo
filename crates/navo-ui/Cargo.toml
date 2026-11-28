@@ -47,6 +47,7 @@ navo-pdf = { path = "../navo-pdf" }
 navo-retention = { path = "../navo-retention" }
 navo-store = { path = "../navo-store" }
 navo-syntax = { path = "../navo-syntax" }
+navo-term = { path = "../navo-term" }
 sidewise-kit = { path = "../sidewise-kit" }
 sidewise-ui = { path = "../sidewise-ui" }
 navo-structured = { path = "../navo-structured" }

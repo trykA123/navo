@@ -45,6 +45,7 @@ mod sheet_sample;
 mod shortcuts_sample;
 mod strip_page;
 mod structured_sample;
+mod terminal_page;
 mod tokens_page;
 mod tokens_sample;
 mod tray_page;

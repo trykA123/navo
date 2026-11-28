@@ -267,8 +267,9 @@ const MORE: [PageInfo; 170] = join(&MID, &clip_palette::ALL);
 
 const SETUP: [PageInfo; 193] = join(&MORE, &setup::ALL);
 
-/// Job cards for moves that kept files in place, at desktop width and in a 390 px column.
-const KEPT: [PageInfo; 2] = [
+/// Job cards for moves that kept files in place, at desktop width and in a 390 px column,
+/// followed by the terminal grid showcase.
+const KEPT: [PageInfo; 3] = [
     info(Page::KeptJobs, "Kept files", "mr1d4-kept", false),
     info(
         Page::KeptJobs390,
@@ -276,6 +277,7 @@ const KEPT: [PageInfo; 2] = [
         "mr1d4-kept-390",
         false,
     ),
+    info(Page::Terminal, "Terminal", "nv13c-terminal", true),
 ];
 
-pub const PAGES: [PageInfo; 195] = join(&SETUP, &KEPT);
+pub const PAGES: [PageInfo; 196] = join(&SETUP, &KEPT);
