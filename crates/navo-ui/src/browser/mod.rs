@@ -243,6 +243,10 @@ impl Browser {
         self.state.remember_placement(setup, placement);
     }
 
+    pub fn find_memory_mut(&mut self) -> &mut navo_core::FindMemory {
+        self.save_requested = true;
+        self.state.find_memory_mut()
+    }
     #[must_use]
     pub fn rows(&self, tab: TabId) -> Rows {
         self.details

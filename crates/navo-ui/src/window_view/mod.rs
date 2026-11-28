@@ -24,6 +24,7 @@ mod drop_menu;
 mod drop_platform;
 mod editor;
 mod find_tab;
+mod find_window;
 mod first_keys;
 mod fkeys;
 mod font_settings;
@@ -252,6 +253,7 @@ pub struct NavoWindow {
     lane: lane::Lane,
     paste_lane: lane::Lane,
     crash: crash::CrashState,
+    find: find_window::FindHost,
     command_center: command_center::CommandCenterState,
     multi_rename: multi_rename::MultiRenameState,
     start: Option<start_watch::Watching>,
@@ -293,6 +295,7 @@ impl NavoWindow {
             viewer: None,
             editor_wraps: true,
             next_prompt: 0,
+            find: find_window::FindHost::new(&options.search.find, cx),
             command_center: CommandCenterState::new(options.search, &options.provider),
             provider: options.provider,
             drives: drives::Drives::new(options.drives),
