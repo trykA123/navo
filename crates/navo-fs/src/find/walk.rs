@@ -1,8 +1,12 @@
 mod archives;
+mod docs;
 mod gitignore;
 
+#[cfg(test)]
+pub(super) use docs::doc_text;
+
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, Cursor, Read};
 use std::ops::ControlFlow;
 use std::time::{Duration, Instant};
 
@@ -219,12 +223,57 @@ impl<'a> Walk<'a> {
             return Ok(());
         }
         if compiled.needs_scan() {
-            let Some(hits) = self.scan_file(location, compiled)? else {
+            let Some(hits) = self.scan_entry(location, &found.entry, compiled)? else {
                 return Ok(());
             };
             found.hits = hits;
         }
         self.record(found, compiled.needs_scan())
+    }
+
+    fn scan_entry(
+        &mut self,
+        location: &Location,
+        entry: &FsEntry,
+        compiled: &Compiled,
+    ) -> Result<Option<FileHits>, FindError> {
+        if let Some(ext) = self.doc_extension(entry) {
+            return self.scan_doc(location, &ext, compiled).map(Some);
+        }
+        self.scan_file(location, compiled)
+    }
+
+    fn doc_extension(&self, entry: &FsEntry) -> Option<String> {
+        if !self.filters.query.docs {
+            return None;
+        }
+        let name = entry.name.to_text();
+        let (_, ext) = name.rsplit_once('.')?;
+        docs::is_doc_ext(ext).then(|| ext.to_owned())
+    }
+
+    fn scan_doc(
+        &mut self,
+        location: &Location,
+        ext: &str,
+        compiled: &Compiled,
+    ) -> Result<FileHits, FindError> {
+        let path = os_path(location).map_err(FindError::Filesystem)?;
+        match docs::doc_text(&path, ext, self.cancel) {
+            Ok(text) => {
+                let hits = scan(Cursor::new(text), compiled, self.cancel.as_atomic_bool())
+                    .unwrap_or_else(|_| FileHits {
+                        skipped: Some(Skip::Document),
+                        ..FileHits::default()
+                    });
+                self.check_cancelled()?;
+                Ok(hits)
+            }
+            Err(skip) => Ok(FileHits {
+                skipped: Some(skip),
+                ..FileHits::default()
+            }),
+        }
     }
 
     fn record(&mut self, found: FoundFile, needs_scan: bool) -> Result<(), FindError> {

@@ -164,6 +164,7 @@ pub struct LineHit {
 pub enum Skip {
     Binary,
     Cancelled,
+    Document,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

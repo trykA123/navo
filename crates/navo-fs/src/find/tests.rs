@@ -1,6 +1,7 @@
 mod archives;
 mod bytes;
 mod depth;
+mod docs;
 mod gitignore;
 mod names;
 mod not;
