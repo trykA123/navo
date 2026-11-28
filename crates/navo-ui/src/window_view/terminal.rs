@@ -281,7 +281,7 @@ impl NavoWindow {
         .min_second(MIN_DRAWER_HEIGHT)
         .aria_label(resize_label)
         .tooltip(resize_tip)
-        .on_change(move |ratio, window, cx| {
+        .on_commit(move |ratio, window, cx| {
             let pct = ratio_to_drawer_pct(ratio);
             let _ = owner.update(cx, |view, cx| {
                 view.persist_terminal_drawer_height(pct, window, cx);

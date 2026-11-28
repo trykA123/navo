@@ -110,7 +110,7 @@ multi_rename.move_row_up | ctrl-shift-up | MultiRenamePreview
 multi_rename.move_row_down | ctrl-shift-down | MultiRenamePreview
 multi_rename.toggle_row | delete | MultiRenamePreview
 [app_menu]
-app_menu.toggle | f10 | global
+app_menu.toggle | f10 | !Terminal
 app_menu.focus_left | left | AppMenu
 app_menu.focus_right | right | AppMenu
 app_menu.focus_up | up | AppMenu
@@ -594,9 +594,9 @@ compare.copy_all_left | ctrl-shift-left | CompareStream
 compare.copy_all_right | ctrl-shift-right | CompareStream
 [navo_window]
 jobs.toggle | ctrl-j | global
-help.key_map | f1 | global
-help.user_guide | shift-f1 | global
-clipboard.open | ctrl-shift-v | !Viewer
+help.key_map | f1 | !Terminal
+help.user_guide | shift-f1 | !Terminal
+clipboard.open | ctrl-shift-v | !Viewer && !Terminal
 button_bar.focus | ctrl-shift-b | global
 terminal.toggle | ctrl-` | global
 tab.new | ctrl-t | NavoPane

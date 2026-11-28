@@ -19,7 +19,7 @@ app_menu.focus_down | down | AppMenu
 app_menu.focus_left | left | AppMenu
 app_menu.focus_right | right | AppMenu
 app_menu.focus_up | up | AppMenu
-app_menu.toggle | f10 | global
+app_menu.toggle | f10 | !Terminal
 bookmark.next | f2 | Viewer
 bookmark.previous | shift-f2 | Viewer
 bookmark.toggle | ctrl-f2 | Viewer
@@ -92,7 +92,7 @@ clip_palette.toggle_reveal | alt-r | ClipPalette
 clip_palette.toggle_reveal | alt-r | ClipPalette > Input
 clip_palette.up | up | ClipPalette
 clip_palette.up | up | ClipPalette > Input
-clipboard.open | ctrl-shift-v | !Viewer
+clipboard.open | ctrl-shift-v | !Viewer && !Terminal
 command_center.back | escape | CommandCenter
 command_center.back | escape | CommandCenter > Input
 command_center.copy_path | ctrl-shift-c | CommandCenter
@@ -310,8 +310,8 @@ find.result_up | up | CompareOutline
 find.result_up | up | FindAll
 find.selection | ctrl-f3 | Viewer
 git.menu | alt-g | FileList
-help.key_map | f1 | global
-help.user_guide | shift-f1 | global
+help.key_map | f1 | !Terminal
+help.user_guide | shift-f1 | !Terminal
 image.actual_size | ctrl-1 | Image
 image.copy | ctrl-c | Image
 image.copy_path | ctrl-shift-c | Image

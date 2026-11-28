@@ -58,7 +58,15 @@ fn is_in(bind: &Bind, namespace: Option<&str>) -> bool {
 /// The context predicate a bind is registered with.
 pub(crate) fn predicate_of(bind: &Bind) -> &str {
     match bind.context.as_str() {
-        GLOBAL if bind.spec.name == "clipboard.open" => "!Viewer",
+        GLOBAL if bind.spec.name == "clipboard.open" => "!Viewer && !Terminal",
+        GLOBAL
+            if matches!(
+                bind.spec.name,
+                "app_menu.toggle" | "help.key_map" | "help.user_guide"
+            ) =>
+        {
+            "!Terminal"
+        }
         context => context,
     }
 }

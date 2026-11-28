@@ -166,10 +166,11 @@ impl TerminalDrawer {
             )
     }
 
-    fn grid_body(&self, mono_font: SharedString, cx: &App) -> impl IntoElement {
+    fn grid_body(&self, mono_font: SharedString, cx: &mut Context<Self>) -> impl IntoElement {
         let snapshot = self.session.read(cx).snapshot();
         let style = GridStyle::default();
         let measured = Rc::clone(&self.measured_dims);
+        let weak = cx.weak_entity();
         let font_family = style.font_family.clone().unwrap_or(mono_font);
         let font_size = style.font_size;
         let line_height = style.line_height;
@@ -182,14 +183,19 @@ impl TerminalDrawer {
             .child(TerminalGrid::new(snapshot, self.cache.clone()).style(style))
             .child(
                 canvas(
-                    move |bounds, window, _| {
+                    move |bounds, window, cx| {
                         let metrics = measure_cell(window, &font_family, font_size, line_height);
                         let inner_w = (bounds.size.width - pad * 2.0).max(px(0.0));
                         let inner_h = (bounds.size.height - pad * 2.0).max(px(0.0));
                         let dims = grid_dimensions(inner_w, inner_h, metrics.width, metrics.height);
-                        if dims.0 > 0 && dims.1 > 0 {
-                            measured.set(dims);
+                        if dims.0 == 0 || dims.1 == 0 || measured.get() == dims {
+                            return;
                         }
+                        measured.set(dims);
+                        let weak = weak.clone();
+                        cx.defer(move |cx| {
+                            let _ = weak.update(cx, |drawer, cx| drawer.sync_measured_size(cx));
+                        });
                     },
                     |_, (), _, _| {},
                 )
@@ -201,7 +207,6 @@ impl TerminalDrawer {
 
 impl Render for TerminalDrawer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.sync_measured_size(cx);
         let t = tokens::current(cx).clone();
         let border = if self.focus.is_focused(window) {
             t.colors.accent

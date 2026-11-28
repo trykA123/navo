@@ -5,8 +5,8 @@ use std::rc::Rc;
 use gpui_kit::base::TestSupportExt;
 use gpui_kit::{
     AnyElement, App, AppContext, Bounds, Context, DragMoveEvent, ElementId, Empty, Entity,
-    EntityId, InteractiveElement, IntoElement, ParentElement, Pixels, Point, Render, RenderOnce,
-    Role, SharedString, StatefulInteractiveElement, Styled, Window, div, px, relative,
+    EntityId, InteractiveElement, IntoElement, MouseButton, ParentElement, Pixels, Point, Render,
+    RenderOnce, Role, SharedString, StatefulInteractiveElement, Styled, Window, div, px, relative,
     transparent_black,
 };
 
@@ -40,6 +40,7 @@ pub enum SplitterAxis {
 pub struct SplitterState {
     ratio: f32,
     default_ratio: f32,
+    drag_changed: bool,
 }
 
 impl SplitterState {
@@ -53,6 +54,7 @@ impl SplitterState {
         Self {
             ratio: clamp_ratio(ratio),
             default_ratio: clamp_ratio(default_ratio),
+            drag_changed: false,
         }
     }
 
@@ -91,6 +93,14 @@ impl SplitterState {
             next = next.min(max_first);
         }
         self.set_ratio(next);
+        self.drag_changed = true;
+    }
+
+    fn take_drag_commit(&mut self) -> Option<f32> {
+        self.drag_changed.then(|| {
+            self.drag_changed = false;
+            self.ratio
+        })
     }
 }
 
@@ -118,6 +128,7 @@ pub struct Splitter {
     aria_label: Option<SharedString>,
     tooltip_text: Option<SharedString>,
     on_change: Option<OnChange>,
+    on_commit: Option<OnChange>,
 }
 
 impl Splitter {
@@ -139,6 +150,7 @@ impl Splitter {
             aria_label: None,
             tooltip_text: None,
             on_change: None,
+            on_commit: None,
         }
     }
 
@@ -183,6 +195,13 @@ impl Splitter {
         self.on_change = Some(Rc::new(callback));
         self
     }
+
+    /// Registers a callback invoked once when a drag ends or double-click resets the ratio.
+    #[must_use]
+    pub fn on_commit(mut self, callback: impl Fn(f32, &mut Window, &mut App) + 'static) -> Self {
+        self.on_commit = Some(Rc::new(callback));
+        self
+    }
 }
 
 struct HandleLook {
@@ -194,6 +213,7 @@ struct HandleLook {
     aria_label: SharedString,
     tooltip_text: SharedString,
     on_change: Option<OnChange>,
+    on_commit: Option<OnChange>,
 }
 
 fn handle(look: HandleLook, cx: &App) -> impl IntoElement {
@@ -206,6 +226,7 @@ fn handle(look: HandleLook, cx: &App) -> impl IntoElement {
         aria_label,
         tooltip_text,
         on_change,
+        on_commit,
     } = look;
     let t = tokens::current(cx);
     let accent = t.colors.accent;
@@ -231,6 +252,9 @@ fn handle(look: HandleLook, cx: &App) -> impl IntoElement {
                     state.ratio()
                 });
                 if let Some(callback) = &on_change {
+                    callback(next, window, cx);
+                }
+                if let Some(callback) = &on_commit {
                     callback(next, window, cx);
                 }
             }
@@ -270,6 +294,18 @@ fn handle(look: HandleLook, cx: &App) -> impl IntoElement {
     }
 }
 
+fn commit_drag(
+    state: &Entity<SplitterState>,
+    on_commit: &Option<OnChange>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let committed = state.update(cx, |state, _| state.take_drag_commit());
+    if let (Some(ratio), Some(callback)) = (committed, on_commit) {
+        callback(ratio, window, cx);
+    }
+}
+
 impl RenderOnce for Splitter {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let ratio = self.state.read(cx).ratio();
@@ -277,13 +313,11 @@ impl RenderOnce for Splitter {
         let axis = self.axis;
         let min_second = self.min_second;
         let state = self.state;
-        let handle_state = state.clone();
-        let on_drag_change = self.on_change.clone();
         let handle_el = handle(
             HandleLook {
                 ratio,
                 axis,
-                state: handle_state,
+                state: state.clone(),
                 owner,
                 is_line_on_hover: self.is_line_on_hover,
                 aria_label: self
@@ -292,10 +326,16 @@ impl RenderOnce for Splitter {
                 tooltip_text: self
                     .tooltip_text
                     .unwrap_or_else(|| SharedString::new_static("Double-click to centre")),
-                on_change: self.on_change,
+                on_change: self.on_change.clone(),
+                on_commit: self.on_commit.clone(),
             },
             cx,
         );
+        let up_state = state.clone();
+        let out_state = state.clone();
+        let up_commit = self.on_commit.clone();
+        let out_commit = self.on_commit;
+        let on_drag_change = self.on_change;
         let root = div()
             .id(self.id)
             .test_support()
@@ -308,16 +348,20 @@ impl RenderOnce for Splitter {
                 if event.drag(cx).0 != owner {
                     return;
                 }
-                let pos = event.event.position;
-                let bounds = event.bounds;
                 let next = state.update(cx, |state, cx| {
-                    state.drag_to(pos, bounds, axis, min_second);
+                    state.drag_to(event.event.position, event.bounds, axis, min_second);
                     cx.notify();
                     state.ratio()
                 });
                 if let Some(callback) = &on_drag_change {
                     callback(next, window, cx);
                 }
+            })
+            .on_mouse_up(MouseButton::Left, move |_, window, cx| {
+                commit_drag(&up_state, &up_commit, window, cx);
+            })
+            .on_mouse_up_out(MouseButton::Left, move |_, window, cx| {
+                commit_drag(&out_state, &out_commit, window, cx);
             });
 
         assemble_split(

@@ -107,7 +107,7 @@ const ALLOW: [Allow; 8] = [
     Allow::Pair {
         key: "ctrl-shift-v",
         first: ("multi_rename.paste_names", "MultiRename"),
-        second: ("clipboard.open", "!Viewer"),
+        second: ("clipboard.open", "!Viewer && !Terminal"),
     },
 ];
 
@@ -169,18 +169,33 @@ fn base(context: &str) -> &str {
     context.split(" > ").next().unwrap_or(context)
 }
 
-/// Reach of two registered contexts. `!Viewer` is live everywhere except inside a viewer.
+fn excluded_contexts(predicate: &str) -> Option<Vec<&str>> {
+    if !predicate.starts_with('!') {
+        return None;
+    }
+    predicate
+        .split(" && ")
+        .map(|term| term.strip_prefix('!'))
+        .collect()
+}
+
+fn is_outside(context: &str, excluded: &[&str]) -> bool {
+    !excluded.iter().any(|name| {
+        matches!(
+            screen_reach(context, name),
+            Some(Reach::Same | Reach::Outer)
+        )
+    })
+}
+
+/// Reach of two registered contexts. Negated globals (`!Terminal`, `!Viewer && !Terminal`) are
+/// live everywhere except inside any excluded screen.
 fn reach(mine: &str, theirs: &str) -> Option<Reach> {
-    match (mine, theirs) {
-        ("!Viewer", "!Viewer") => Some(Reach::Same),
-        ("!Viewer", other) | (other, "!Viewer") => {
-            let inside = matches!(
-                screen_reach(other, "Viewer"),
-                Some(Reach::Same | Reach::Outer)
-            );
-            (!inside).then_some(Reach::Same)
-        }
-        _ => screen_reach(mine, theirs),
+    match (excluded_contexts(mine), excluded_contexts(theirs)) {
+        (Some(_), Some(_)) => Some(Reach::Same),
+        (Some(excluded), None) => is_outside(theirs, &excluded).then_some(Reach::Same),
+        (None, Some(excluded)) => is_outside(mine, &excluded).then_some(Reach::Same),
+        (None, None) => screen_reach(mine, theirs),
     }
 }
 
@@ -382,7 +397,7 @@ fn guard_every_context_in_the_keymap_is_known() {
         .binds()
         .iter()
         .map(|bind| base(predicate_of(bind)))
-        .filter(|context| *context != "!Viewer")
+        .filter(|context| excluded_contexts(context).is_none())
         .filter(|context| !knows(context) && !STANDALONE.contains(context))
         .collect();
     assert_eq!(unknown, Vec::<&str>::new());

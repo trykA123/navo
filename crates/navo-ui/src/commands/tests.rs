@@ -166,7 +166,11 @@ fn bindings_sit_in_their_command_context(cx: &mut TestAppContext) {
             let spec = for_action(binding.action)?;
             let fits = if spec.context == GLOBAL {
                 binding.context == GLOBAL
-                    || (spec.name == "clipboard.open" && binding.context == "!Viewer")
+                    || (spec.name == "clipboard.open" && binding.context == "!Viewer && !Terminal")
+                    || (matches!(
+                        spec.name,
+                        "app_menu.toggle" | "help.key_map" | "help.user_guide"
+                    ) && binding.context == "!Terminal")
             } else {
                 is_within(&binding.context, spec.context)
                     || super::keymap::also_in(spec.name, &binding.context)
