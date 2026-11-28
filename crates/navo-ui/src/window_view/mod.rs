@@ -68,6 +68,7 @@ mod search_hooks;
 mod settings_news;
 mod settings_save;
 mod settings_sheet;
+mod settings_window;
 mod shell_menu;
 mod spring;
 mod start;

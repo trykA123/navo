@@ -23,6 +23,7 @@ use navo_core::Location;
 
 use super::settings_news::SettingsInbox;
 use super::settings_save::{SaveReport, SaveSettings, Saver};
+use super::settings_window::SettingsHost;
 use super::{NavoWindow, SearchHooks};
 use crate::prelude::*;
 use crate::settings::{
@@ -81,6 +82,7 @@ impl SettingsHooks {
 }
 
 pub(super) struct SettingsPanel {
+    pub(in crate::window_view) host: SettingsHost,
     sheet: Entity<SheetState>,
     focus: FocusHandle,
     scroll: ScrollHandle,
@@ -153,6 +155,7 @@ impl SettingsPanel {
 
     fn new(file: Option<Location>, line_of: FindLine, cx: &mut App) -> Self {
         Self {
+            host: SettingsHost::default(),
             sheet: cx.new(|_| SheetState::new()),
             focus: cx.focus_handle(),
             scroll: ScrollHandle::new(),
@@ -316,7 +319,12 @@ impl NavoWindow {
         }
     }
 
-    fn settings_event(&mut self, event: SheetEvent, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn settings_event(
+        &mut self,
+        event: SheetEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         match event {
             SheetEvent::Select(row) => self.select_setting(row, window, cx),
             SheetEvent::Fold(row, open) => {

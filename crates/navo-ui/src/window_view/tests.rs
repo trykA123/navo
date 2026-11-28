@@ -110,6 +110,7 @@ mod settings_state;
 mod settings_status;
 mod settings_updates;
 mod settings_upgrade;
+mod settings_window;
 mod shell_menu;
 pub(in crate::window_view) mod shortcuts;
 mod soak;
