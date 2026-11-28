@@ -204,15 +204,24 @@ impl NavoWindow {
         // SettingsWindow, which reads Navo's settings state. Defer the open so the draw
         // runs outside this NavoWindow update lease.
         cx.defer(move |cx| {
+            match navo.update(cx, |navo, cx| navo.settings.host.show(cx)) {
+                Ok(false) => {}
+                Ok(true) | Err(_) => return,
+            }
             let Some((handle, settings_raw)) = open_the_window(navo.clone(), main, cx) else {
                 return;
             };
-            let _ = navo.update(cx, |navo, cx| {
-                navo.settings.host.open(handle, settings_raw);
-                navo.check_settings_owner(settings_raw, navo_raw);
-                navo.focus_settings_content(cx);
-                cx.notify();
-            });
+            if navo
+                .update(cx, |navo, cx| {
+                    navo.settings.host.open(handle, settings_raw);
+                    navo.check_settings_owner(settings_raw, navo_raw);
+                    navo.focus_settings_content(cx);
+                    cx.notify();
+                })
+                .is_err()
+            {
+                let _ = cx.update_window(handle.into(), |_, window, _| window.remove_window());
+            }
         });
     }
 
@@ -227,6 +236,16 @@ impl NavoWindow {
         }
         window.activate_window();
         self.settings.host.close(cx);
+        cx.notify();
+    }
+
+    /// Clears SettingsHost and activates Navo when the Settings window is closing itself.
+    fn on_settings_window_closing(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.settings.host.is_open() {
+            return;
+        }
+        window.activate_window();
+        self.settings.host.clear();
         cx.notify();
     }
 
@@ -300,7 +319,13 @@ fn open_the_window(
         settings_raw = native_raw(settings_window);
         let view = cx.new(|cx| SettingsWindow::new(navo, main, cx));
         settings_window.on_window_should_close(cx, move |_, cx| {
-            view::request_close(main, cx);
+            if update_navo(&main, cx, |navo, window, cx| {
+                navo.on_settings_window_closing(window, cx);
+            })
+            .is_none()
+            {
+                tracing::warn!("a settings close arrived after Navo's window closed");
+            }
             true
         });
         view

@@ -214,3 +214,38 @@ fn ctrl_k_inside_settings_opens_nothing(cx: &mut TestAppContext) {
     assert_eq!(cx.windows().len(), 2);
     assert_eq!(settings_window(&rig, cx), Some(handle));
 }
+
+#[gpui_kit::test]
+fn rapid_double_open_before_defer_keeps_one_settings_window(cx: &mut TestAppContext) {
+    let rig = rig(cx, false);
+    assert_eq!(cx.windows().len(), 1);
+
+    let view = rig.view.clone();
+    cx.update_window(rig.window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_settings_window(window, cx);
+            view.open_settings_window(window, cx);
+        });
+    })
+    .expect("navo window");
+    cx.run_until_parked();
+
+    assert_eq!(cx.windows().len(), 2);
+    assert!(settings_window(&rig, cx).is_some());
+}
+
+#[gpui_kit::test]
+fn ctrl_comma_inside_settings_closes_the_window_and_clears_host(cx: &mut TestAppContext) {
+    let rig = rig(cx, false);
+    open_settings(cx, &rig);
+    let handle = settings_window(&rig, cx).expect("settings window handle");
+    assert_eq!(cx.windows().len(), 2);
+
+    press_settings(cx, handle, "ctrl-,");
+
+    assert!(
+        !rig.view
+            .read_with(cx, |view, _| view.settings.host.is_open())
+    );
+    assert_eq!(cx.windows().len(), 1);
+}

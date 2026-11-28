@@ -38,14 +38,20 @@ impl SettingsWindow {
     }
 }
 
+/// Defers closing the Settings window until its update lease ends.
+fn defer_close(main: WindowHandle<NavoWindow>, settings: AnyWindowHandle, cx: &mut App) {
+    cx.defer(move |cx| request_close(main, settings, cx));
+}
+
 /// Routes a close request to Navo so the host closes the window on Navo's side.
-pub(super) fn request_close(main: WindowHandle<NavoWindow>, cx: &mut App) {
+fn request_close(main: WindowHandle<NavoWindow>, settings: AnyWindowHandle, cx: &mut App) {
     if update_navo(&main, cx, |navo, window, cx| {
         navo.close_settings_window(window, cx);
     })
     .is_none()
     {
         tracing::warn!("a settings close arrived after Navo's window closed");
+        let _ = cx.update_window(settings, |_, window, _| window.remove_window());
     }
 }
 
@@ -69,8 +75,8 @@ impl Render for SettingsWindow {
             .font_family(t.typography.ui_font.clone())
             .text_size(t.typography.body)
             .when(t.is_contrast, |root| root.bg(t.colors.background))
-            .on_action(cx.listener(|view, _: &ToggleSettings, _, cx| {
-                request_close(view.main, cx);
+            .on_action(cx.listener(|view, _: &ToggleSettings, window, cx| {
+                defer_close(view.main, window.window_handle(), cx);
             }));
         let Some(navo) = self.navo.upgrade() else {
             return root;
@@ -84,7 +90,7 @@ impl Render for SettingsWindow {
         root.child(
             NavoTitleBar::new(t!("settings-title"))
                 .menu_arrow(false)
-                .on_close(move |_, cx| request_close(main, cx)),
+                .on_close(move |window, cx| defer_close(main, window.window_handle(), cx)),
         )
         .child(settings::content(body))
     }
