@@ -1,6 +1,7 @@
 //! Owned floating find-results window host: lifecycle, placement and book ownership.
 
 mod open;
+mod title;
 mod view;
 
 use navo_core::FindMemory;

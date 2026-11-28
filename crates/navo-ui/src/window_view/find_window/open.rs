@@ -45,13 +45,14 @@ impl NavoWindow {
             ..WindowOptions::default()
         };
         let book = self.find.book().clone();
+        let pinned = self.browser.state().find_memory().pinned;
         let navo = cx.weak_entity();
         let navo_handle = window.window_handle();
         let mut find_raw = None;
         let opened = crate::open_window(options, cx, |find_window, cx| {
             find_raw = native_raw(find_window);
             wire_find_close(find_window, navo.clone(), navo_handle, cx);
-            cx.new(|cx| FindWindow::new(navo, navo_handle, book, cx))
+            cx.new(|cx| FindWindow::new(navo, navo_handle, book, pinned, cx))
         });
         let (handle, view) = match opened {
             Ok(opened) => opened,
@@ -110,6 +111,19 @@ impl NavoWindow {
         }
         self.find.set_hidden(true);
         let _ = cx.update_window(navo, |_, window, _| window.activate_window());
+    }
+
+    /// Toggles the results window's always-on-top pin, saving it and notifying the platform hook.
+    pub(in crate::window_view) fn toggle_find_pin(&mut self, cx: &mut Context<Self>) {
+        let next = !self.browser.state().find_memory().pinned;
+        self.browser.find_memory_mut().pinned = next;
+        if let Some(find_raw) = self.find.raw() {
+            (self.find.hooks().pin)(find_raw, next);
+        }
+        if let Some(view) = self.find.view().cloned() {
+            view.update(cx, |view, cx| view.set_pinned(next, cx));
+        }
+        cx.notify();
     }
 
     /// Persists queries (the pin stays), remembers placement when known, clears window state.

@@ -65,6 +65,7 @@ mod drop;
 mod empty_folder;
 mod find;
 mod find_window;
+mod find_window_tabs;
 mod first_key;
 mod fkeys;
 mod git_badges;

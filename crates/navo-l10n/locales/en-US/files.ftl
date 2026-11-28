@@ -297,6 +297,11 @@ command-center-content-case = Case
 command-center-content-regex = Regex
 
 find-title-empty = Search
+find-window-new-tab = New search
+find-window-add-tab = New search tab
+find-window-pin = Keep above other windows
+find-window-unpin = Stop keeping above other windows
+find-window-minimize = Minimise
 find-path = search: { $text }
 find-path-filtered = search: { $text } · { $filters }
 find-counts = { $hits } hits in { $files } files

@@ -17,6 +17,7 @@ pub(in crate::window_view) struct FindWindow {
     navo: WeakEntity<NavoWindow>,
     navo_window: AnyWindowHandle,
     book: Entity<FindBook>,
+    pinned: bool,
     _book_watch: Subscription,
 }
 
@@ -26,6 +27,7 @@ impl FindWindow {
         navo: WeakEntity<NavoWindow>,
         navo_window: AnyWindowHandle,
         book: Entity<FindBook>,
+        pinned: bool,
         cx: &mut Context<Self>,
     ) -> Self {
         let _book_watch = cx.observe(&book, |_, _, cx| cx.notify());
@@ -33,6 +35,7 @@ impl FindWindow {
             navo,
             navo_window,
             book,
+            pinned,
             _book_watch,
         }
     }
@@ -51,6 +54,17 @@ impl FindWindow {
     pub(super) fn book(&self) -> &Entity<FindBook> {
         &self.book
     }
+
+    /// Returns whether this window is currently pinned above other windows.
+    pub(super) fn is_pinned(&self) -> bool {
+        self.pinned
+    }
+
+    /// Updates the mirrored pin state and schedules a repaint.
+    pub(super) fn set_pinned(&mut self, pinned: bool, cx: &mut Context<Self>) {
+        self.pinned = pinned;
+        cx.notify();
+    }
 }
 
 impl Render for FindWindow {
@@ -63,28 +77,31 @@ impl Render for FindWindow {
             .size_full()
             .flex()
             .flex_col()
-            .gap(theme.spacing.sm)
-            .p(theme.spacing.md)
             .bg(theme.colors.background)
             .text_color(theme.colors.text)
             .font_family(theme.typography.ui_font.clone())
             .text_size(theme.typography.body)
+            .child(self.title_bar(cx))
             .child(
                 div()
-                    .id("find-window-title")
-                    .test_support()
-                    .child(t!("find-title-empty")),
-            )
-            .child(
-                div()
-                    .id("find-window-tabs")
-                    .test_support()
-                    .child(tabs.to_string()),
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .gap(theme.spacing.sm)
+                    .p(theme.spacing.md)
+                    .child(
+                        div()
+                            .id("find-window-title")
+                            .test_support()
+                            .child(t!("find-title-empty")),
+                    )
+                    .child(
+                        div()
+                            .id("find-window-tabs")
+                            .test_support()
+                            .child(tabs.to_string()),
+                    ),
             )
     }
 }
-
-// Pins view accessors until title-bar and focus-switch atoms wire them.
-const _: fn(&FindWindow) -> &WeakEntity<NavoWindow> = FindWindow::navo;
-const _: fn(&FindWindow) -> AnyWindowHandle = FindWindow::navo_window;
-const _: fn(&FindWindow) -> &Entity<FindBook> = FindWindow::book;
