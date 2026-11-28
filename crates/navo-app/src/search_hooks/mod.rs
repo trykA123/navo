@@ -1,5 +1,6 @@
 mod find;
 mod folder_totals;
+mod pin;
 mod service;
 mod visits;
 
@@ -15,7 +16,7 @@ pub(crate) use service::add_upgrade_notice;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use navo_ui::window_view::{CommandUse, Frecent, Frecents, RecentCommands, SearchHooks};
+use navo_ui::window_view::{CommandUse, FindHooks, Frecent, Frecents, RecentCommands, SearchHooks};
 
 use crate::files::{SharedDb, lock, now_ms};
 
@@ -127,6 +128,11 @@ pub(crate) fn with_visits(
             SearchHooks {
                 service: service::hooks(),
                 folder_totals: folder_totals::query(),
+                find: FindHooks {
+                    pin: pin::order(),
+                    ensure_owner: Arc::new(pin::ensure_owner),
+                    ..FindHooks::none()
+                },
                 ..SearchHooks::none()
             },
             None,

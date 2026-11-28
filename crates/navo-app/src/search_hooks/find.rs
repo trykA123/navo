@@ -3,13 +3,9 @@
 use std::sync::Arc;
 
 use navo_store::{Collection, CollectionKind, Db, NewCollection};
-use navo_ui::window_view::{FindHooks, SavedSearch, WindowOrder};
+use navo_ui::window_view::{FindHooks, SavedSearch};
 
 use crate::files::{SharedDb, lock, now_ms};
-
-fn order() -> WindowOrder {
-    Arc::new(|_, _| {})
-}
 
 fn to_saved_search(collection: Collection) -> SavedSearch {
     SavedSearch {
@@ -42,8 +38,8 @@ pub(super) fn hooks(db: SharedDb) -> FindHooks {
     let (save_search_db, save_snapshot_db, saved_db, delete_db) =
         (db.clone(), db.clone(), db.clone(), db);
     FindHooks {
-        pin: order(),
-        ensure_owner: Arc::new(|_, _| false),
+        pin: super::pin::order(),
+        ensure_owner: Arc::new(super::pin::ensure_owner),
         save_search: Arc::new(move |name, query, base| {
             lock(&save_search_db)
                 .create_collection(
