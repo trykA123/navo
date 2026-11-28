@@ -295,7 +295,7 @@ impl NavoWindow {
             viewer: None,
             editor_wraps: true,
             next_prompt: 0,
-            find: find_window::FindHost::new(&options.search.find, cx),
+            find: find_window::FindHost::new(&options.search.find, options.state.find_memory(), cx),
             command_center: CommandCenterState::new(options.search, &options.provider),
             provider: options.provider,
             drives: drives::Drives::new(options.drives),

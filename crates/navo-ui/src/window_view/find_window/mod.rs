@@ -3,9 +3,11 @@
 mod open;
 mod view;
 
+use navo_core::FindMemory;
+
 use crate::find_results::book::FindBook;
 use crate::prelude::*;
-use crate::window_view::hand_off::RawWindowHandle;
+use crate::window_view::hand_off::{RawWindowHandle, WindowShown};
 use crate::window_view::search_hooks::FindHooks;
 
 #[cfg(test)]
@@ -23,10 +25,15 @@ pub(super) struct FindHost {
 }
 
 impl FindHost {
-    /// Creates a new find host with an empty book and the app's find hooks.
-    pub(super) fn new(hooks: &FindHooks, cx: &mut App) -> Self {
+    /// Creates a new find host, restoring saved queries as idle tabs.
+    pub(super) fn new(hooks: &FindHooks, memory: &FindMemory, cx: &mut App) -> Self {
+        let book = cx.new(|_| {
+            let mut book = FindBook::new();
+            book.restore(memory.queries().to_vec());
+            book
+        });
         Self {
-            book: cx.new(|_| FindBook::new()),
+            book,
             window: None,
             raw: None,
             hidden: false,
@@ -68,6 +75,13 @@ impl FindHost {
     /// Updates whether the results window is hidden.
     pub(super) fn set_hidden(&mut self, hidden: bool) {
         self.hidden = hidden;
+    }
+
+    /// Shows or hides the floating window with the owner, unless the user hid it.
+    pub(super) fn follow_shown(&self, hook: &WindowShown, shown: bool) {
+        if self.is_open() && !self.is_hidden() {
+            hook(self.raw(), shown);
+        }
     }
 
     /// Returns the pending file-operation id owned by the results window, if any.

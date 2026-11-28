@@ -1,10 +1,11 @@
 //! Opening, placing, focusing and closing the floating find-results window.
 
-use gpui_kit::{DisplayId, WindowKind};
+use gpui_kit::{DisplayId, WeakEntity, WindowKind};
 
 use super::super::placement::{self, Shown};
 use super::super::{NavoWindow, raw_handle};
 use super::FindWindow;
+use crate::find_results::book::TRIM_LINES;
 use crate::prelude::*;
 use crate::window_view::hand_off::RawWindowHandle;
 
@@ -49,6 +50,7 @@ impl NavoWindow {
         let mut find_raw = None;
         let opened = crate::open_window(options, cx, |find_window, cx| {
             find_raw = native_raw(find_window);
+            wire_find_close(find_window, navo.clone(), navo_handle, cx);
             cx.new(|cx| FindWindow::new(navo, navo_handle, book, cx))
         });
         let (handle, view) = match opened {
@@ -64,23 +66,61 @@ impl NavoWindow {
         cx.notify();
     }
 
-    /// Saves the find-results window placement and closes the floating window.
+    /// Saves the find book and placement, then closes the floating window.
     pub(in crate::window_view) fn close_find(&mut self, cx: &mut Context<Self>) {
         let Some(handle) = self.find.window_handle() else {
+            self.finish_find_close(None, cx);
             return;
         };
         let shown = cx.update_window(handle, |_, window, cx| {
-            let shown = Shown {
-                bounds: window.window_bounds(),
-                display: window.display(cx).map(|display| display.id()),
-            };
+            let shown = find_shown(window, cx);
             window.remove_window();
             shown
         });
-        if let Ok(shown) = shown {
+        self.finish_find_close(shown.ok(), cx);
+    }
+
+    /// The user closed the results window: activate Navo first so focus never drops behind
+    /// another app, then persist the book, trim stored hits and let the platform close it.
+    pub(in crate::window_view) fn close_find_by_user(
+        &mut self,
+        navo: AnyWindowHandle,
+        find: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let _ = cx.update_window(navo, |_, window, _| window.activate_window());
+        let shown = find_shown(find, cx);
+        self.finish_find_close(Some(shown), cx);
+        self.find
+            .book()
+            .update(cx, |book, _| book.trim_all(TRIM_LINES));
+    }
+
+    /// Minimise: hide the results window through the platform hook and hand focus to Navo.
+    pub(in crate::window_view) fn hide_find(
+        &mut self,
+        navo: AnyWindowHandle,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.find.is_open() || self.find.is_hidden() {
+            return;
+        }
+        if let Some(hook) = &self.window_shown {
+            hook(self.find.raw(), false);
+        }
+        self.find.set_hidden(true);
+        let _ = cx.update_window(navo, |_, window, _| window.activate_window());
+    }
+
+    /// Persists queries (the pin stays), remembers placement when known, clears window state.
+    fn finish_find_close(&mut self, shown: Option<Shown>, cx: &mut Context<Self>) {
+        let saved = self.find.book().read(cx).saved();
+        let memory = self.browser.find_memory_mut();
+        memory.set_queries(saved);
+        if let Some(shown) = shown {
             let screens = placement::screens(cx);
-            if let Some((setup, saved)) = placement::placement(&screens, shown) {
-                self.browser.find_memory_mut().remember(&setup, saved);
+            if let Some((setup, place)) = placement::placement(&screens, shown) {
+                memory.remember(&setup, place);
             }
         }
         self.find.clear_window();
@@ -91,6 +131,11 @@ impl NavoWindow {
         let Some(handle) = self.find.window_handle() else {
             return false;
         };
+        if self.find.is_hidden()
+            && let Some(hook) = &self.window_shown
+        {
+            hook(self.find.raw(), true);
+        }
         let active = cx
             .update_window(handle, |_, window, _| window.activate_window())
             .is_ok();
@@ -171,6 +216,29 @@ impl NavoWindow {
     }
 }
 
+/// Wires the native close (X) of the results window to the owner's user-close path.
+fn wire_find_close(
+    find_window: &mut Window,
+    navo: WeakEntity<NavoWindow>,
+    navo_handle: AnyWindowHandle,
+    cx: &mut App,
+) {
+    find_window.on_window_should_close(cx, move |window, cx| {
+        let _ = navo.update(cx, |view, cx| {
+            view.close_find_by_user(navo_handle, window, cx)
+        });
+        true
+    });
+}
+
+/// The window's current placement snapshot.
+fn find_shown(window: &Window, cx: &App) -> Shown {
+    Shown {
+        bounds: window.window_bounds(),
+        display: window.display(cx).map(|display| display.id()),
+    }
+}
+
 /// The window's native raw handle; test builds fall back to a synthetic handle per window.
 fn native_raw(window: &Window) -> Option<RawWindowHandle> {
     let raw = raw_handle(window);
@@ -182,3 +250,4 @@ fn native_raw(window: &Window) -> Option<RawWindowHandle> {
 // Pins host lifecycle entry points until key and close atoms wire them.
 const _: fn(&mut NavoWindow, &mut Window, &mut Context<NavoWindow>) = NavoWindow::open_find;
 const _: fn(&mut NavoWindow, &mut Context<NavoWindow>) = NavoWindow::close_find;
+const _: fn(&mut NavoWindow, AnyWindowHandle, &mut Context<NavoWindow>) = NavoWindow::hide_find;

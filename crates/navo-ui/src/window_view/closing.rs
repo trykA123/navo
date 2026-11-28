@@ -74,6 +74,7 @@ impl NavoWindow {
         }
         self.save_recording_on_close(cx);
         let _ = self.browser.shutdown(JOB_STOP_WAIT);
+        self.close_find(cx);
         self.save_now(window, cx);
         true
     }

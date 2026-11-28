@@ -1,15 +1,28 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use gpui_kit::{
     AnyWindowHandle, AppContext as _, Entity, TestAppContext, VisualTestContext, px, size,
 };
+use navo_core::find::{FileHits, LineHit};
+use navo_core::{EntryKind, Location, ProviderPath, SavedFind};
+use navo_fs::find::{FindProgress, FoundBatch, FoundFile};
+use navo_fs::{Attributes, FsEntry};
 
 use super::super::find_window::test_raw_handle;
-use super::super::{FindHooks, NavoWindow, RawWindowHandle};
+use super::super::open_requests;
+use super::super::{
+    FindHooks, NavoWindow, OpenRequest, OpenSender, RawWindowHandle, ResidentHooks,
+};
 use super::{fake, open_options, options_for, settle, two_panes};
+use crate::find_results::book::FindBook;
+use crate::settings::{Change, Field, Value, Values};
 
 type OwnerCalls = Arc<Mutex<Vec<(String, String)>>>;
 type PinCalls = Arc<Mutex<Vec<(String, bool)>>>;
+type ShownCalls = Arc<Mutex<Vec<(Option<String>, bool)>>>;
+type Saves = Rc<RefCell<Vec<usize>>>;
 
 fn raw_tag(handle: RawWindowHandle) -> String {
     format!("{handle:?}")
@@ -20,17 +33,70 @@ struct Rig {
     view: Entity<NavoWindow>,
     owner_calls: OwnerCalls,
     pin_calls: PinCalls,
+    shown_calls: ShownCalls,
+    sender: OpenSender,
+    saves: Saves,
+}
+
+struct TrayResident;
+
+impl ResidentHooks for TrayResident {
+    fn apply(&self, _values: &Values) {}
+
+    fn key_taken(&self) -> bool {
+        false
+    }
+
+    fn clipboard_key_taken(&self) -> bool {
+        false
+    }
+
+    fn has_tray(&self) -> bool {
+        true
+    }
 }
 
 fn rig(cx: &mut TestAppContext, pinned: bool, owner_repaired: bool) -> Rig {
+    rig_with(cx, pinned, owner_repaired, false)
+}
+
+fn rig_with(
+    cx: &mut TestAppContext,
+    pinned: bool,
+    owner_repaired: bool,
+    keep_in_tray: bool,
+) -> Rig {
     let fs = fake();
     let mut state = two_panes(&fs);
     state.find_memory_mut().pinned = pinned;
     let owner_calls = OwnerCalls::default();
     let pin_calls = PinCalls::default();
+    let shown_calls = ShownCalls::default();
+    let saves = Saves::default();
+    let (sender, inbox) = open_requests();
     let mut options = options_for(fs, state);
     let recorded_owners = owner_calls.clone();
     let recorded_pins = pin_calls.clone();
+    let recorded_shown = shown_calls.clone();
+    let recorded_saves = saves.clone();
+    options.on_save = Rc::new(move |state| {
+        recorded_saves
+            .borrow_mut()
+            .push(state.find_memory().queries().len());
+    });
+    options.open.inbox = Some(inbox);
+    options.open.resident = Some(Rc::new(TrayResident));
+    options.open.window_shown = Some(Arc::new(move |handle, shown| {
+        recorded_shown
+            .lock()
+            .expect("shown calls")
+            .push((handle.map(raw_tag), shown));
+        true
+    }));
+    options.settings.values = options.settings.values.with(&Change {
+        field: Field::KeepInTray,
+        value: Value::Flag(keep_in_tray),
+    });
     options.search.find = FindHooks {
         pin: Arc::new(move |handle, on| {
             recorded_pins
@@ -54,6 +120,9 @@ fn rig(cx: &mut TestAppContext, pinned: bool, owner_repaired: bool) -> Rig {
         view,
         owner_calls,
         pin_calls,
+        shown_calls,
+        sender,
+        saves,
     }
 }
 
@@ -75,6 +144,73 @@ impl Rig {
     fn find_window(&self, cx: &mut TestAppContext) -> Option<AnyWindowHandle> {
         self.view.read_with(cx, |view, _| view.find.window_handle())
     }
+
+    fn shown_calls(&self) -> Vec<(Option<String>, bool)> {
+        self.shown_calls.lock().expect("shown calls").clone()
+    }
+
+    fn tray_hide(&self, cx: &mut TestAppContext) -> bool {
+        VisualTestContext::from_window(self.window, cx).simulate_close()
+    }
+
+    fn tray_show(&self, cx: &mut TestAppContext) {
+        assert!(
+            self.sender.send(OpenRequest::default()),
+            "inbox takes arrivals"
+        );
+        settle(cx, &self.view);
+    }
+
+    fn hide_find(&self, cx: &mut TestAppContext) {
+        let window = self.window;
+        self.view.update(cx, |view, cx| view.hide_find(window, cx));
+        cx.run_until_parked();
+    }
+
+    fn is_navo_active(&self, cx: &mut TestAppContext) -> bool {
+        cx.update_window(self.window, |_, window, _| window.is_window_active())
+            .expect("navo window")
+    }
+
+    fn add_tab(&self, cx: &mut TestAppContext, text: &str) -> u64 {
+        self.view.update(cx, |view, cx| {
+            view.find.book().update(cx, |book, _| {
+                book.add(text, Location::new("/tmp/find").expect("test location"))
+            })
+        })
+    }
+}
+
+/// Fills one tab's store with a single file holding `lines` hit lines.
+fn fill_hits(book: &mut FindBook, id: u64, lines: u64) {
+    let tab = book.tab_mut(id).expect("tab");
+    let hits = (1..=lines)
+        .map(|line| LineHit {
+            line,
+            column: 1,
+            text: "a matched hit line with enough bytes for memory tests".into(),
+        })
+        .collect();
+    let file = FoundFile {
+        relative: ProviderPath::from_text("file.rs"),
+        entry: FsEntry {
+            name: ProviderPath::from_text("file.rs"),
+            kind: EntryKind::File,
+            size: 16,
+            modified_ms: Some(1_000),
+            attributes: Attributes::default(),
+        },
+        hits: FileHits {
+            hits,
+            total: u32::try_from(lines).unwrap_or(u32::MAX),
+            skipped: None,
+        },
+    };
+    let batch = FoundBatch {
+        files: vec![file],
+        progress: FindProgress::default(),
+    };
+    tab.store.push(0, &batch).expect("synthetic batch fits");
 }
 
 #[gpui_kit::test]
@@ -199,4 +335,151 @@ fn first_placement_opens_over_the_half_not_holding_the_focused_pane(cx: &mut Tes
         .expect("left bounds");
     assert!(left_bounds.origin.x < px(500.), "{left_bounds:?}");
     assert_eq!(left_bounds.size, size(px(450.), px(480.)));
+}
+
+#[gpui_kit::test]
+fn tray_hide_and_show_call_the_find_hook_before_navo(cx: &mut TestAppContext) {
+    let rig = rig_with(cx, false, false, true);
+    rig.open_find(cx);
+    let find = rig.find_window(cx).expect("find window handle");
+    let tag = Some(raw_tag(test_raw_handle(find)));
+
+    assert!(!rig.tray_hide(cx));
+    assert_eq!(rig.shown_calls(), vec![(tag.clone(), false), (None, false)]);
+
+    rig.tray_show(cx);
+    assert_eq!(
+        rig.shown_calls(),
+        vec![
+            (tag.clone(), false),
+            (None, false),
+            (tag, true),
+            (None, true)
+        ]
+    );
+}
+
+#[gpui_kit::test]
+fn minimise_hides_find_hands_focus_to_navo_and_tray_skips_it(cx: &mut TestAppContext) {
+    let rig = rig_with(cx, false, false, true);
+    rig.open_find(cx);
+    let find = rig.find_window(cx).expect("find window handle");
+    let tag = Some(raw_tag(test_raw_handle(find)));
+    VisualTestContext::from_window(find, cx).deactivate_window();
+    cx.run_until_parked();
+
+    rig.hide_find(cx);
+    assert_eq!(rig.shown_calls(), vec![(tag.clone(), false)]);
+    assert!(rig.view.read_with(cx, |view, _| view.find.is_hidden()));
+    assert!(rig.is_navo_active(cx));
+
+    assert!(!rig.tray_hide(cx));
+    rig.tray_show(cx);
+    assert_eq!(
+        rig.shown_calls(),
+        vec![(tag, false), (None, false), (None, true)]
+    );
+}
+
+#[gpui_kit::test]
+fn reopen_while_user_hidden_shows_and_focuses_the_same_window(cx: &mut TestAppContext) {
+    let rig = rig_with(cx, false, false, true);
+    rig.open_find(cx);
+    let find = rig.find_window(cx).expect("find window handle");
+    let tag = Some(raw_tag(test_raw_handle(find)));
+    rig.hide_find(cx);
+    VisualTestContext::from_window(find, cx).deactivate_window();
+    cx.run_until_parked();
+
+    rig.open_find(cx);
+    assert_eq!(cx.windows().len(), 2);
+    assert_eq!(rig.find_window(cx), Some(find));
+    assert!(!rig.view.read_with(cx, |view, _| view.find.is_hidden()));
+    assert_eq!(rig.shown_calls(), vec![(tag.clone(), false), (tag, true)]);
+    let active = cx
+        .update_window(find, |_, window, _| window.is_window_active())
+        .expect("find window");
+    assert!(active);
+}
+
+#[gpui_kit::test]
+fn find_host_restores_saved_queries_as_idle_tabs(cx: &mut TestAppContext) {
+    let fs = fake();
+    let mut state = two_panes(&fs);
+    let base = fs.location("home/docs");
+    state.find_memory_mut().set_queries(vec![
+        SavedFind {
+            text: "report".into(),
+            base: base.clone(),
+        },
+        SavedFind {
+            text: "needle ext:rs".into(),
+            base,
+        },
+    ]);
+    let (_window, view) = open_options(cx, options_for(fs, state));
+    let book = view.read_with(cx, |view, _| view.find.book().clone());
+    book.read_with(cx, |book, _| {
+        assert_eq!(book.len(), 2);
+        assert_eq!(book.tabs()[0].text, "report");
+        assert_eq!(book.tabs()[1].text, "needle ext:rs");
+        assert!(book.tabs().iter().all(|tab| !tab.is_running()));
+    });
+}
+
+#[gpui_kit::test]
+fn navo_close_persists_find_queries_before_the_session_save(cx: &mut TestAppContext) {
+    let rig = rig(cx, false, false);
+    rig.open_find(cx);
+    rig.add_tab(cx, "needle");
+
+    assert!(rig.tray_hide(cx));
+    let queries = rig.view.read_with(cx, |view, _| {
+        view.browser.state().find_memory().queries().to_vec()
+    });
+    assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].text, "needle");
+    assert_eq!(rig.saves.borrow().last().copied(), Some(1));
+}
+
+#[gpui_kit::test]
+fn user_close_activates_navo_persists_and_trims(cx: &mut TestAppContext) {
+    let rig = rig(cx, true, false);
+    rig.open_find(cx);
+    let find = rig.find_window(cx).expect("find window handle");
+    let first = rig.add_tab(cx, "alpha");
+    let second = rig.add_tab(cx, "beta");
+    rig.view.update(cx, |view, cx| {
+        view.find.book().update(cx, |book, _| {
+            fill_hits(book, first, 8);
+            fill_hits(book, second, 8);
+        });
+    });
+    VisualTestContext::from_window(find, cx).deactivate_window();
+    cx.run_until_parked();
+
+    assert!(VisualTestContext::from_window(find, cx).simulate_close());
+    cx.run_until_parked();
+    assert!(rig.is_navo_active(cx));
+    assert_eq!(rig.find_window(cx), None);
+    let (queries, pinned) = rig.view.read_with(cx, |view, _| {
+        let memory = view.browser.state().find_memory();
+        (memory.queries().to_vec(), memory.pinned)
+    });
+    assert_eq!(
+        queries
+            .iter()
+            .map(|query| query.text.as_str())
+            .collect::<Vec<_>>(),
+        vec!["alpha", "beta"]
+    );
+    assert!(pinned);
+    rig.view.update(cx, |view, cx| {
+        view.find.book().update(cx, |book, _| {
+            for id in [first, second] {
+                let tab = book.tab(id).expect("tab");
+                assert_eq!(tab.store.file(0).expect("file").lines().count(), 3);
+            }
+        });
+    });
 }

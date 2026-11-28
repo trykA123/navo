@@ -262,6 +262,9 @@ impl NavoWindow {
     }
 
     pub(super) fn set_window_shown(&self, window: &Window, shown: bool) -> bool {
+        if let Some(hook) = &self.window_shown {
+            self.find.follow_shown(hook, shown);
+        }
         self.window_shown
             .as_ref()
             .is_some_and(|hook| hook(raw_handle(window), shown))
