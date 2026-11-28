@@ -25,7 +25,7 @@ fn tables_of(page: Section) -> &'static [&'static str] {
         Section::CopyDelete => &["copy", "retention"],
         Section::Search => &["search"],
         Section::Viewers => &["text", "image", "markdown", "preview", "automotive"],
-        Section::Tools => &["terminal", "editor", "git", "compare"],
+        Section::Tools => &["modules", "terminal", "editor", "git", "compare"],
         Section::TrayClipboard => &["tray", "clipboard"],
         Section::About => &["updates"],
     }

@@ -120,6 +120,7 @@ fn default_of(spec: &FieldSpec) -> Value {
         Field::UiScale => Value::Number(100),
         Field::ModifierHints => Value::Pick(2),
         Field::ModifierHintsDelay => Value::Number(400),
+        Field::TerminalDrawerHeight => Value::Number(40),
         Field::FoldersFirst
         | Field::SpaceMeasuresFolders
         | Field::TextLineNumbers
@@ -390,6 +391,19 @@ impl Values {
                 options.get(*at).map_or("system", |option| option.toml)
             }
             _ => "system",
+        }
+    }
+
+    /// Returns whether the optional built-in terminal module is enabled (`[modules] terminal`).
+    pub fn terminal_module_on(&self) -> bool {
+        self.flag(Field::ModuleTerminal)
+    }
+
+    /// Returns the saved terminal drawer height percentage, clamped to `10..=90` (default `40`).
+    pub fn terminal_drawer_height(&self) -> u16 {
+        match self.get(Field::TerminalDrawerHeight) {
+            Value::Number(value) => u16::try_from((*value).clamp(10, 90)).unwrap_or(40),
+            _ => 40,
         }
     }
 

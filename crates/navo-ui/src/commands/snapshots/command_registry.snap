@@ -529,6 +529,7 @@ button_bar_editor.remove | Remove button | ButtonBarEditor
 button_bar_editor.duplicate | Duplicate button | ButtonBarEditor
 button_bar_editor.undo | Undo button bar edit | ButtonBarEditor
 button_bar_editor.done | Close button bar editor | ButtonBarEditor
+terminal.toggle | Toggle terminal | global
 window.new | New window | global
 workspace.list | Workspaces | global
 app.quit | Quit | global

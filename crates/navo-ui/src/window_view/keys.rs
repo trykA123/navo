@@ -53,7 +53,8 @@ gpui_kit::actions!(
         ShowHiddenPath,
         ShowHiddenTabs,
         StopRecording,
-        ToggleJobs
+        ToggleJobs,
+        ToggleTerminal
     ]
 );
 

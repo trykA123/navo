@@ -179,6 +179,7 @@ impl NavoWindow {
         }
         self.show_parts(cx);
         self.apply_preview_parts();
+        self.sync_terminal_settings(cx);
         self.refresh_window_menu(cx);
     }
 

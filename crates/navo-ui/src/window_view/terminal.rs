@@ -1,17 +1,40 @@
+//! External terminal launcher and built-in terminal drawer host owned by [`NavoWindow`].
+
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use navo_core::{Location, PaneId};
+use navo_term::Size;
+#[cfg(not(test))]
+use navo_term::grid::DEFAULT_SCROLLBACK;
+#[cfg(not(test))]
+use navo_term::shells::{Probe, detect};
 
 use super::NavoWindow;
 use crate::prelude::*;
+use crate::primitives::{Splitter, SplitterState};
+use crate::settings::{Change, Field, Value, Values};
+use crate::terminal::{
+    DEFAULT_DRAWER_HEIGHT_PCT, MIN_DRAWER_HEIGHT, TerminalDrawer, TerminalOffNotice,
+    TerminalSession, title_bar_terminal_button,
+};
+use crate::tokens;
 
 type Open = Arc<dyn Fn(&Location) -> Result<(), String> + Send + Sync>;
 
+#[cfg(test)]
+type TestSpawner = std::rc::Rc<dyn Fn(Size, &mut Context<TerminalSession>) -> TerminalSession>;
+
+/// Initial cell grid before the first layout measurement refines it.
+const INITIAL_SIZE: Size = Size { cols: 80, rows: 24 };
+
+/// Host hooks for launching the configured external terminal in a folder.
 pub struct TerminalHooks {
     pub open: Open,
 }
 
 impl TerminalHooks {
+    /// Returns a no-op hook reporting that external terminals are not configured.
     #[must_use]
     pub fn none() -> Self {
         Self {
@@ -20,7 +43,65 @@ impl TerminalHooks {
     }
 }
 
+/// Per-window built-in terminal state: owns the [`TerminalSession`] entity, drawer view,
+/// splitter state, visibility flag, and module-off notice state (D161.1, D161.3).
+pub(super) struct TerminalHost {
+    session: Option<Entity<TerminalSession>>,
+    drawer: Option<Entity<TerminalDrawer>>,
+    splitter: Entity<SplitterState>,
+    is_open: bool,
+    off_notice: bool,
+    #[cfg(test)]
+    spawner: Option<TestSpawner>,
+}
+
+impl TerminalHost {
+    /// Creates an empty terminal host without spawning any session or thread (D161.1).
+    pub(super) fn new(values: &Values, cx: &mut App) -> Self {
+        let ratio = drawer_pct_to_ratio(values.terminal_drawer_height());
+        let default_ratio = drawer_pct_to_ratio(DEFAULT_DRAWER_HEIGHT_PCT);
+        let splitter = cx.new(|_| SplitterState::with_default(ratio, default_ratio));
+        Self {
+            session: None,
+            drawer: None,
+            splitter,
+            is_open: false,
+            off_notice: false,
+            #[cfg(test)]
+            spawner: None,
+        }
+    }
+
+    fn shutdown(&mut self, cx: &mut App) {
+        if let Some(session) = self.session.take() {
+            session.update(cx, |session, _| session.shutdown());
+        }
+        self.drawer = None;
+        self.is_open = false;
+    }
+
+    fn sync_height(&self, pct: u16, cx: &mut App) {
+        let target = drawer_pct_to_ratio(pct);
+        self.splitter.update(cx, |state, cx| {
+            if (state.ratio() - target).abs() > 0.005 {
+                state.set_ratio(target);
+                cx.notify();
+            }
+        });
+    }
+}
+
+fn drawer_pct_to_ratio(pct: u16) -> f32 {
+    1.0 - (f32::from(pct.clamp(10, 90)) / 100.0)
+}
+
+fn ratio_to_drawer_pct(ratio: f32) -> u16 {
+    let pct = ((1.0 - ratio) * 100.0).round() as i64;
+    u16::try_from(pct.clamp(10, 90)).unwrap_or(DEFAULT_DRAWER_HEIGHT_PCT)
+}
+
 impl NavoWindow {
+    /// Launches the user's configured external terminal in the active pane's local folder.
     pub(super) fn open_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let state = self.browser.state();
         let pane = state.focused_pane();
@@ -44,5 +125,279 @@ impl NavoWindow {
         if let Err(error) = opened {
             self.report_pane_error(pane, error.into());
         }
+    }
+
+    /// Handles `Ctrl+\``: shows the module-off notice when disabled, or cycles
+    /// hidden -> show+focus -> (unfocused) re-focus -> (focused) hide+pane-focus when enabled.
+    pub(super) fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.values.terminal_module_on() {
+            self.terminal_host.off_notice = true;
+            cx.notify();
+            return;
+        }
+        self.terminal_host.off_notice = false;
+        if !self.terminal_host.is_open {
+            self.show_and_focus_terminal(window, cx);
+            return;
+        }
+        if self.is_terminal_focused_inner(window, cx) {
+            self.hide_terminal(window, cx);
+        } else {
+            self.focus_terminal_drawer(window, cx);
+        }
+    }
+
+    /// Handles clicking the title-bar Terminal button: opens+focuses when hidden, hides when open.
+    fn toggle_terminal_button(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.values.terminal_module_on() {
+            self.terminal_host.off_notice = true;
+            cx.notify();
+            return;
+        }
+        if self.terminal_host.is_open {
+            self.hide_terminal(window, cx);
+        } else {
+            self.show_and_focus_terminal(window, cx);
+        }
+    }
+
+    fn show_and_focus_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.ensure_terminal_session(cx) {
+            return;
+        }
+        self.terminal_host.is_open = true;
+        self.focus_terminal_drawer(window, cx);
+        self.cached.refresh_title(cx);
+        cx.notify();
+    }
+
+    fn hide_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.terminal_host.is_open = false;
+        self.focus_core_pane(window, cx);
+        self.cached.refresh_title(cx);
+        cx.notify();
+    }
+
+    fn focus_terminal_drawer(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(drawer) = &self.terminal_host.drawer {
+            let handle = drawer.read(cx).focus_handle();
+            window.focus(&handle, cx);
+            cx.notify();
+        }
+    }
+
+    fn is_terminal_focused_inner(&self, window: &Window, cx: &App) -> bool {
+        self.terminal_host
+            .drawer
+            .as_ref()
+            .is_some_and(|drawer| drawer.read(cx).is_focused(window))
+    }
+
+    fn ensure_terminal_session(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.terminal_host.session.is_some() && self.terminal_host.drawer.is_some() {
+            return true;
+        }
+        let session = match self.spawn_initial_session(cx) {
+            Ok(session) => session,
+            Err(message) => {
+                let pane = self.browser.state().focused_pane();
+                self.report_pane_error(pane, message.into());
+                return false;
+            }
+        };
+        let owner = cx.weak_entity();
+        let drawer = cx.new(|cx| {
+            TerminalDrawer::new(
+                session.clone(),
+                move |window, cx| {
+                    let _ = owner.update(cx, |view, cx| view.hide_terminal(window, cx));
+                },
+                cx,
+            )
+        });
+        self.terminal_host.session = Some(session);
+        self.terminal_host.drawer = Some(drawer);
+        true
+    }
+
+    #[cfg(test)]
+    fn spawn_initial_session(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Result<Entity<TerminalSession>, String> {
+        let spawner = self.terminal_host.spawner.clone();
+        let session = cx.new(|cx| match spawner {
+            Some(make) => make(INITIAL_SIZE, cx),
+            None => TerminalSession::with_fake(INITIAL_SIZE, cx).0,
+        });
+        Ok(session)
+    }
+
+    #[cfg(not(test))]
+    fn spawn_initial_session(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Result<Entity<TerminalSession>, String> {
+        let shells = detect(&Probe::system(Vec::new()));
+        let Some(shell) = shells.into_iter().next() else {
+            return Err(navo_l10n::tr("terminal-not-configured"));
+        };
+        let cwd = self.active_local_folder();
+        TerminalSession::spawn_entity(&shell, &cwd, INITIAL_SIZE, DEFAULT_SCROLLBACK, cx)
+            .map_err(|err| navo_l10n::t!("terminal-spawn-error", error = err.to_string()))
+    }
+
+    #[allow(dead_code, reason = "used by real PTY spawning outside unit tests")]
+    fn active_local_folder(&self) -> PathBuf {
+        let folder = self.browser.state().active_tab().location();
+        if folder.is_local() {
+            return PathBuf::from(folder.path().display().to_string());
+        }
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    }
+
+    /// Wraps the main panes body in a vertical [`Splitter`] when the bottom terminal drawer is open.
+    pub(super) fn wrap_terminal_drawer(
+        &self,
+        body: AnyElement,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if !self.terminal_host.is_open {
+            return body;
+        }
+        let Some(drawer) = self.terminal_host.drawer.clone() else {
+            return body;
+        };
+        let owner = cx.weak_entity();
+        let resize_label = navo_l10n::tr("terminal-drawer-resize");
+        let resize_tip = navo_l10n::tr("terminal-drawer-resize-tip");
+        Splitter::new(
+            "terminal-drawer-split",
+            &self.terminal_host.splitter,
+            body,
+            drawer,
+        )
+        .vertical()
+        .min_second(MIN_DRAWER_HEIGHT)
+        .aria_label(resize_label)
+        .tooltip(resize_tip)
+        .on_change(move |ratio, window, cx| {
+            let pct = ratio_to_drawer_pct(ratio);
+            let _ = owner.update(cx, |view, cx| {
+                view.persist_terminal_drawer_height(pct, window, cx);
+            });
+        })
+        .into_any_element()
+    }
+
+    fn persist_terminal_drawer_height(
+        &mut self,
+        pct: u16,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.values.terminal_drawer_height() == pct {
+            return;
+        }
+        self.change_setting(
+            Change {
+                field: Field::TerminalDrawerHeight,
+                value: Value::Number(i64::from(pct)),
+            },
+            window,
+            cx,
+        );
+    }
+
+    /// Renders the module-off notice overlay when `Ctrl+\`` was pressed while the module is off.
+    pub(super) fn terminal_off_notice_layer(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.terminal_host.off_notice {
+            return None;
+        }
+        let t = tokens::current(cx);
+        let turn_on = cx.weak_entity();
+        let external = cx.weak_entity();
+        let dismiss = cx.weak_entity();
+        let notice = TerminalOffNotice::new(
+            move |window, cx| {
+                let _ = turn_on.update(cx, |view, cx| {
+                    view.terminal_host.off_notice = false;
+                    view.open_settings(window, cx);
+                    cx.notify();
+                });
+            },
+            move |window, cx| {
+                let _ = external.update(cx, |view, cx| {
+                    view.terminal_host.off_notice = false;
+                    view.open_terminal(window, cx);
+                    cx.notify();
+                });
+            },
+            move |window, cx| {
+                let _ = dismiss.update(cx, |view, cx| {
+                    view.terminal_host.off_notice = false;
+                    view.focus_core_pane(window, cx);
+                    cx.notify();
+                });
+            },
+        );
+        Some(
+            div()
+                .absolute()
+                .bottom(t.spacing.md)
+                .right(t.spacing.md)
+                .child(notice)
+                .into_any_element(),
+        )
+    }
+
+    /// Returns the title-bar Terminal button while `[modules] terminal` is on.
+    pub(super) fn title_terminal_button(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.values.terminal_module_on() {
+            return None;
+        }
+        let owner = cx.weak_entity();
+        Some(
+            title_bar_terminal_button(
+                self.terminal_host.is_open,
+                move |window, cx| {
+                    let _ = owner.update(cx, |view, cx| view.toggle_terminal_button(window, cx));
+                },
+                cx,
+            )
+            .into_any_element(),
+        )
+    }
+
+    /// Applies updated terminal module & drawer height settings from `self.values`.
+    pub(super) fn sync_terminal_settings(&mut self, cx: &mut App) {
+        if !self.values.terminal_module_on() {
+            self.terminal_host.shutdown(cx);
+        } else {
+            self.terminal_host.off_notice = false;
+        }
+        self.terminal_host
+            .sync_height(self.values.terminal_drawer_height(), cx);
+        self.cached.refresh_title(cx);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_terminal_spawner(&mut self, spawner: TestSpawner) {
+        self.terminal_host.spawner = Some(spawner);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_terminal_session(&self) -> bool {
+        self.terminal_host.session.is_some()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_terminal_open(&self) -> bool {
+        self.terminal_host.is_open
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_terminal_focused(&self, window: &Window, cx: &App) -> bool {
+        self.is_terminal_focused_inner(window, cx)
     }
 }

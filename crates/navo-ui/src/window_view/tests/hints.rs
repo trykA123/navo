@@ -102,7 +102,7 @@ fn the_header_counts_the_keys_and_the_layers_one_modifier_away(cx: &mut TestAppC
     assert_eq!(label(cx, "modifier-hints-more-Alt"), "4 more with Alt");
     assert_eq!(
         label(cx, "modifier-hints-count"),
-        "25 keys in the file list"
+        "26 keys in the file list"
     );
 }
 

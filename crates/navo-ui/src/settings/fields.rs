@@ -36,6 +36,8 @@ pub enum Field {
     RightButton,
     TerminalProvider,
     TerminalCommand,
+    ModuleTerminal,
+    TerminalDrawerHeight,
     EditorPath,
     CopyMode,
     CopyVerify,
@@ -222,7 +224,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 90] = join([
+pub const FIELDS: [FieldSpec; 92] = join([
     &GENERAL,
     &SEARCH_ROWS,
     &GIT_FIELDS,

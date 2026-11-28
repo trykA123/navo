@@ -598,6 +598,7 @@ help.key_map | f1 | global
 help.user_guide | shift-f1 | global
 clipboard.open | ctrl-shift-v | !Viewer
 button_bar.focus | ctrl-shift-b | global
+terminal.toggle | ctrl-` | global
 tab.new | ctrl-t | NavoPane
 pane.drive_menu_first | alt-f1 | NavoPane
 pane.drive_menu_second | alt-f2 | NavoPane

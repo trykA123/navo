@@ -21,6 +21,7 @@ mod settings_pages;
 mod space;
 mod structured;
 mod tab_menu;
+mod terminal;
 mod user_commands;
 mod user_keys;
 mod viewer;
@@ -174,6 +175,7 @@ fn registry() -> impl Iterator<Item = CommandSpec> {
         compare::GROUPS.as_slice(),
         user_commands::GROUPS.as_slice(),
         button_bar::GROUPS.as_slice(),
+        terminal::GROUPS.as_slice(),
     ];
     let actions = bound.into_iter().flatten().flat_map(|group| {
         group

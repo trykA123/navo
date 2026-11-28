@@ -120,6 +120,7 @@ mod tab_close;
 mod tab_drag;
 mod tabs;
 mod terminal;
+mod terminal_drawer;
 mod tiles;
 mod tray;
 mod typed;

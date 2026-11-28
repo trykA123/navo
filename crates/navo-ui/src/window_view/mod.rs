@@ -216,6 +216,7 @@ pub struct NavoWindow {
     first_keys: first_keys::FirstKeys,
     editor: EditorHooks,
     terminal: TerminalHooks,
+    terminal_host: terminal::TerminalHost,
     files: FileHooks,
     kinds: viewer::Kinds,
     viewer: Option<viewer::Viewer>,
@@ -276,6 +277,7 @@ impl NavoWindow {
         let (values, saver, settings) = Panel::split(options.settings, &options.search, cx);
         let compare =
             compare_view::CompareView::new((&options.open, &options.files, &values), window, cx);
+        let terminal_host = terminal::TerminalHost::new(&values, cx);
         let view = Self {
             browser,
             focus: HashMap::new(),
@@ -291,6 +293,7 @@ impl NavoWindow {
             first_keys: first_keys::FirstKeys::new(window),
             editor: options.editor,
             terminal: options.terminal,
+            terminal_host,
             files: options.files,
             kinds: options.kinds,
             viewer: None,

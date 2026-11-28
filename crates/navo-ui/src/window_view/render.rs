@@ -39,6 +39,9 @@ impl Render for NavoWindow {
                 view.toggle_settings(window, cx);
             }))
             .on_action(cx.listener(|view, _: &keys::ToggleJobs, _, cx| view.jobs_key(cx)))
+            .on_action(cx.listener(|view, _: &keys::ToggleTerminal, window, cx| {
+                view.toggle_terminal(window, cx);
+            }))
             .children(Self::noted_modal(self.modal_view(window, cx)))
             .children(self.app_menu_view(cx))
             .children(self.shell_menu_view())

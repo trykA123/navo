@@ -37,6 +37,7 @@ impl NavoWindow {
         self.end_finished_drag(cx);
         let t = tokens::current(cx).clone();
         let body = self.panes_view(window, cx);
+        let body = self.wrap_terminal_drawer(body, cx);
         let has_strip = self.fkey_strip_height(&t) > px(0.);
         div()
             .relative()
@@ -82,6 +83,7 @@ impl NavoWindow {
             .children(self.layout_switcher_view(cx))
             .children(self.preset_dialog_view(cx))
             .children(self.clipboard_layer(window, cx))
+            .children(self.terminal_off_notice_layer(cx))
     }
 
     pub(super) fn below_title_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {

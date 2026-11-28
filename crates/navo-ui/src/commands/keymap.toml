@@ -43,6 +43,10 @@ keys = ["ctrl-shift-v"]
 command = "button_bar.focus"
 keys = ["ctrl-shift-b"]
 
+[[bind]]
+command = "terminal.toggle"
+keys = ["ctrl-`"]
+
 # NavoPane
 
 [[bind]]

@@ -13,5 +13,5 @@ pub use columns::{
     symbol_prefix,
 };
 pub use sidewise_kit::primitives::*;
-pub use splitter::{Splitter, SplitterState};
+pub use splitter::{Splitter, SplitterAxis, SplitterState};
 pub use tabs::{Tab, Tabs};

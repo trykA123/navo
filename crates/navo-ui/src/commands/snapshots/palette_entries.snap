@@ -529,6 +529,7 @@ button_bar_editor.remove | ButtonBarEditor | false
 button_bar_editor.duplicate | ButtonBarEditor | false
 button_bar_editor.undo | ButtonBarEditor | false
 button_bar_editor.done | ButtonBarEditor | false
+terminal.toggle | global | true
 window.new | global | true
 workspace.list | global | true
 app.quit | global | true

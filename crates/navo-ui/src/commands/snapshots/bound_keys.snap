@@ -526,6 +526,7 @@ table.copy_row | ctrl-shift-c | Table
 table.first_cell | home | Table
 table.last_cell | end | Table
 table.sort_by_column | ctrl-f3 | Table
+terminal.toggle | ctrl-` | global
 trace.filter_backspace | backspace | CanTrace
 trace.filter_by_id | enter | CanTrace
 trace.sort_ids | alt-s | CanTrace

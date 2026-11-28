@@ -67,6 +67,7 @@ insta = "1.49.0"
 object = { version = "=0.41.0", default-features = false, features = ["elf", "write_std"] }
 proptest = "1.12.0"
 navo-automotive = { path = "../navo-automotive", features = ["sample"] }
+navo-term = { path = "../navo-term", features = ["test-support"] }
 sidewise-kit = { path = "../sidewise-kit", features = ["test-support"] }
 sidewise-ui = { path = "../sidewise-ui", features = ["test-support"] }
 tempfile = "3.27.0"

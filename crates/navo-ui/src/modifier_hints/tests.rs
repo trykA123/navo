@@ -71,10 +71,11 @@ fn the_ctrl_layer_has_three_groups_with_short_labels() {
             "Layouts",
             "Save workspace",
             "Narrower sheet",
-            "Wider sheet"
+            "Wider sheet",
+            "Terminal"
         ]
     );
-    assert_eq!(layer.count(), 25);
+    assert_eq!(layer.count(), 26);
 }
 
 #[test]

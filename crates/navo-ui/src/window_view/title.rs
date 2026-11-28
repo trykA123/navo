@@ -241,6 +241,10 @@ impl NavoWindow {
             Some(pill) => bar.trailing(pill),
             None => bar,
         };
+        let bar = match self.title_terminal_button(cx) {
+            Some(button) => bar.trailing(button),
+            None => bar,
+        };
         let bar = if self.can_open_window_menu() {
             bar.trailing(view_button(self.host_screen_open(cx), cx))
         } else {

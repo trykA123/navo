@@ -14,7 +14,7 @@ const TERMINAL_PROVIDERS: [Choice; 5] = [
     choice("settings-terminal-provider-custom", "custom"),
 ];
 
-pub(super) const GENERAL: [FieldSpec; 32] = [
+pub(super) const GENERAL: [FieldSpec; 34] = [
     spec(
         (F::Theme, S::Appearance, "appearance.mode"),
         ("Theme", "settings-theme-help"),
@@ -165,6 +165,19 @@ pub(super) const GENERAL: [FieldSpec; 32] = [
         (F::TerminalCommand, S::Tools, "terminal.command"),
         ("Command", "Your own command line; {path} is the folder"),
         Control::Text,
+    ),
+    spec(
+        (F::ModuleTerminal, S::Tools, "modules.terminal"),
+        ("settings-module-terminal", "settings-module-terminal-help"),
+        Control::Toggle,
+    ),
+    spec(
+        (F::TerminalDrawerHeight, S::Tools, "terminal.drawer-height"),
+        (
+            "settings-terminal-drawer-height",
+            "settings-terminal-drawer-height-help",
+        ),
+        Control::Number,
     ),
     spec(
         (F::EditorPath, S::Tools, "editor.path"),

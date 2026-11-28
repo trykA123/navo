@@ -9,6 +9,8 @@ impl Field {
             self,
             Self::LightTheme
                 | Self::DarkTheme
+                | Self::ModuleTerminal
+                | Self::TerminalDrawerHeight
                 | Self::AutomotiveMemoryStrip
                 | Self::AutomotiveCharts
                 | Self::AutomotiveRowBars

@@ -61,6 +61,11 @@ impl CachedViews {
                 .flex_none(),
         )
     }
+
+    /// Marks the cached title bar dirty so trailing controls (e.g. Terminal button) repaint.
+    pub(super) fn refresh_title(&self, cx: &mut App) {
+        self.title.update(cx, |_, cx| cx.notify());
+    }
 }
 
 impl NavoWindow {
