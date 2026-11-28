@@ -78,7 +78,7 @@ impl ClassicForm {
     /// Returns one `(field, message)` entry per rejected field, in token order.
     pub fn to_query(&self) -> Result<FindQuery, Vec<(ClassicField, String)>> {
         let query = FindQuery::parse(&self.to_text());
-        let errors = query
+        let mut errors = query
             .tokens
             .iter()
             .filter_map(|token| {
@@ -86,6 +86,7 @@ impl ClassicForm {
                 Some((field_of(token.kind), message.to_string()))
             })
             .collect::<Vec<_>>();
+        errors.extend(combo_errors(&query));
         if errors.is_empty() {
             Ok(query)
         } else {
@@ -170,14 +171,13 @@ impl ClassicForm {
         push_filter(&mut chunks, ClassicField::Modified, "mod:", &self.modified);
         push_filter(&mut chunks, ClassicField::Attrs, "attr:", &self.attrs);
         for folder in &self.folders {
-            chunks.push(Chunk::new(
-                ClassicField::Folders,
-                filter_token("in:", folder),
-            ));
+            chunks.push(Chunk::new(ClassicField::Folders, folder_token(folder)));
         }
         push_flag(&mut chunks, ClassicField::Archives, self.archives, "arc:on");
         push_flag(&mut chunks, ClassicField::GitOff, self.git_off, "git:off");
-        push_filter(&mut chunks, ClassicField::Names, "name:", &self.names);
+        if !self.names.is_empty() {
+            chunks.push(Chunk::new(ClassicField::Names, names_token(&self.names)));
+        }
         if let Some(depth) = self.depth {
             chunks.push(Chunk::new(ClassicField::Depth, format!("depth:{depth}")));
         }
@@ -229,6 +229,24 @@ fn text_token(text: &str, regex: bool) -> String {
     query.to_text()
 }
 
+/// Prints one `name:` value through the query printer, so quoting is never re-invented.
+fn names_token(value: &str) -> String {
+    let query = FindQuery {
+        name: Some(value.to_owned()),
+        ..FindQuery::default()
+    };
+    query.to_text()
+}
+
+/// Prints one `in:` folder through the query printer, so quoting is never re-invented.
+fn folder_token(folder: &str) -> String {
+    let query = FindQuery {
+        within: vec![folder.to_owned()],
+        ..FindQuery::default()
+    };
+    query.to_text()
+}
+
 /// Prints the chosen encodings as one `enc:` list.
 fn encodings_token(encodings: &[TextEncoding]) -> String {
     let query = FindQuery {
@@ -252,12 +270,47 @@ fn hex_text(bytes: &[u8]) -> String {
 }
 
 /// Quotes a value so the parser reads it back as one token while it is mid-edit.
+///
+/// Mirrors the query printer: a literal quote followed by whitespace closes and reopens the
+/// quote, so `a" b` never splits into two tokens or leaks its error onto another field.
 fn raw_value(value: &str) -> String {
-    if value.chars().any(char::is_whitespace) || value.contains('"') {
-        format!("\"{}\"", value.replace('"', "\\\""))
-    } else {
-        value.to_owned()
+    let needs_quotes =
+        value.contains(char::is_whitespace) || value.contains(':') || value.contains('"');
+    if !needs_quotes {
+        return value.to_owned();
     }
+    let mut out = String::from("\"");
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '"' {
+            out.push(ch);
+            continue;
+        }
+        if chars.peek().is_some_and(|next| next.is_whitespace()) {
+            out.push_str("\\\"\"\"");
+        } else {
+            out.push_str("\\\"");
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Matcher-only token combinations, reported against the field that breaks them.
+///
+/// Mirrors `validate_query` in the core matcher; `word:on` with `re:` is a valid pair.
+fn combo_errors(query: &FindQuery) -> Vec<(ClassicField, String)> {
+    let mut errors = Vec::new();
+    if query.hex.is_some() && (query.regex || query.word || !query.text.is_empty()) {
+        errors.push((
+            ClassicField::Hex,
+            "hex: cannot be combined with re:, word: or text".to_owned(),
+        ));
+    }
+    if query.invert && (query.text.is_empty() || query.hex.is_some()) {
+        errors.push((ClassicField::Not, "not: needs text to look for".to_owned()));
+    }
+    errors
 }
 
 /// The form field a parsed token kind belongs to.

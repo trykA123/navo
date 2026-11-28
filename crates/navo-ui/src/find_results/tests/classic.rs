@@ -1,6 +1,6 @@
 //! Classic form tests: every field round-trips, bad fields report their own field, spans are exact.
 
-use navo_core::find::{FindQuery, TextEncoding};
+use navo_core::find::{Compiled, FindQuery, TextEncoding};
 
 use crate::find_results::classic::{ClassicField, ClassicForm};
 
@@ -182,4 +182,92 @@ fn absent_tokens_have_no_span() {
     ] {
         assert_eq!(ClassicForm::default().token_span(field), None, "{field:?}");
     }
+}
+
+#[test]
+fn folder_with_quote_and_space_round_trips() {
+    let folder = "a\" b".to_owned();
+    let form = ClassicForm {
+        folders: vec![folder.clone()],
+        ..ClassicForm::default()
+    };
+    let text = form.to_text();
+    let parsed = FindQuery::parse(&text);
+    assert!(
+        parsed.tokens.iter().all(|token| token.message.is_none()),
+        "no token error in {text}"
+    );
+    assert_eq!(parsed.within, vec![folder.clone()], "text: {text}");
+    let restored = ClassicForm::from_query(&parsed);
+    assert_eq!(restored, form, "text: {text}");
+    assert_eq!(restored.to_text(), text);
+    let built = form
+        .to_query()
+        .unwrap_or_else(|errors| panic!("{errors:?}"));
+    assert_eq!(built.within, vec![folder], "text: {text}");
+}
+
+#[test]
+fn quote_and_space_values_blame_their_own_field() {
+    let form = ClassicForm {
+        size: "1\" 0".into(),
+        names: ";a\" b".into(),
+        ..ClassicForm::default()
+    };
+    let errors = form.to_query().expect_err("two bad fields");
+    let fields: Vec<ClassicField> = errors.iter().map(|(field, _)| *field).collect();
+    assert_eq!(
+        fields,
+        vec![ClassicField::Size, ClassicField::Names],
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn hex_with_text_blames_the_hex_field() {
+    let form = ClassicForm {
+        text: "MZ".into(),
+        hex: "4d5a".into(),
+        ..ClassicForm::default()
+    };
+    let parsed = FindQuery::parse(&form.to_text());
+    assert!(parsed.tokens.iter().all(|token| token.message.is_none()));
+    assert!(Compiled::new(&parsed).is_err(), "matcher rejects the combo");
+    let errors = form.to_query().expect_err("hex with text");
+    assert!(
+        errors
+            .iter()
+            .any(|(field, message)| *field == ClassicField::Hex && message.contains("hex:")),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn not_without_text_blames_the_not_field() {
+    let form = ClassicForm {
+        not: true,
+        ..ClassicForm::default()
+    };
+    let parsed = FindQuery::parse(&form.to_text());
+    assert!(Compiled::new(&parsed).is_err(), "matcher rejects not:on");
+    let errors = form.to_query().expect_err("not without text");
+    assert!(
+        errors.iter().any(|(field, _)| *field == ClassicField::Not),
+        "{errors:?}"
+    );
+}
+
+#[test]
+fn word_with_regex_is_a_valid_combo() {
+    let form = ClassicForm {
+        text: "na.*".into(),
+        word: true,
+        regex: true,
+        ..ClassicForm::default()
+    };
+    let built = form
+        .to_query()
+        .unwrap_or_else(|errors| panic!("{errors:?}"));
+    assert!(built.word && built.regex);
+    assert!(Compiled::new(&built).is_ok(), "matcher accepts word + re");
 }
