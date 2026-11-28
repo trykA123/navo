@@ -57,6 +57,7 @@ pub enum QueryTerm {
     MemoryV1,
     StatusV1,
     VersionV1,
+    StatusV2,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +108,7 @@ pub struct Status {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "super::status_v2::WireResponse")]
 pub enum Response {
     Hits {
         generation: u64,
@@ -133,6 +135,11 @@ pub enum Response {
         generation: u64,
         revision: u32,
         build: String,
+    },
+    StatusV2 {
+        generation: u64,
+        status: Status,
+        detail: Vec<super::VolumeDetail>,
     },
 }
 
@@ -182,6 +189,7 @@ pub struct Reply {
     pub memory: Option<MemoryReport>,
     pub hits: Vec<Hit>,
     pub status: Status,
+    pub status_detail: Option<Vec<super::VolumeDetail>>,
 }
 
 #[cfg(test)]

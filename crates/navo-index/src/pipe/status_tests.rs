@@ -176,7 +176,7 @@ fn an_old_service_gives_the_status_without_totals() {
         old_service(request, replies)
     })
     .unwrap();
-    assert_eq!(asked, 2);
+    assert_eq!(asked, 3);
     assert_eq!(status.volumes[0].entries, 3);
     assert_eq!(status.volumes[0].total_files, None);
 }
@@ -186,12 +186,16 @@ fn a_new_service_answers_the_detailed_status_in_one_exchange() {
     let mut asked = 0;
     let status = read_status(|request, replies| {
         asked += 1;
-        assert!(request.wants_status() && replies == 1);
-        let response = Response::StatusV1 {
+        assert!(request.wants_status_v2() && replies == 1);
+        let response = Response::StatusV2 {
             generation: 1,
             status: Status {
                 volumes: vec![volume(3, Some(9))],
             },
+            detail: vec![super::super::VolumeDetail {
+                total_files: Some(9),
+                ..super::super::VolumeDetail::default()
+            }],
         };
         Ok(vec![
             frames::decode(&frames::encode(&response).unwrap()).unwrap(),

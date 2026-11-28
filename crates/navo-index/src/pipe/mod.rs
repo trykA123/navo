@@ -7,6 +7,7 @@ mod memory;
 mod memory_wire;
 mod session;
 mod status;
+mod status_v2;
 mod status_wire;
 mod totals;
 #[cfg(not(windows))]
@@ -59,6 +60,7 @@ pub use frames::{
     Request, Response, SIZES_UNKNOWN_PREFIX, Status, VolumeMemory, VolumeStatus,
 };
 pub use memory::Part;
+pub use status_v2::{VolumeDetail, VolumeState};
 pub use version::{SERVICE_REVISION, ServiceVersion, build_id};
 
 pub use totals::folder_paths_within_limits;
@@ -75,7 +77,11 @@ impl Request {
         if let Some(paths) = self.folder_paths() {
             return folder_paths_within_limits(paths);
         }
-        if self.wants_memory() || self.wants_status() || self.wants_version() {
+        if self.wants_memory()
+            || self.wants_status()
+            || self.wants_status_v2()
+            || self.wants_version()
+        {
             return true;
         }
         self.terms.len() <= 64
@@ -84,6 +90,7 @@ impl Request {
                 QueryTerm::FolderTotalsV1(_)
                 | QueryTerm::MemoryV1
                 | QueryTerm::StatusV1
+                | QueryTerm::StatusV2
                 | QueryTerm::VersionV1 => false,
                 QueryTerm::Ext(extensions) => {
                     extensions.len() <= 1024
@@ -105,6 +112,7 @@ impl Request {
                     QueryTerm::FolderTotalsV1(_)
                     | QueryTerm::MemoryV1
                     | QueryTerm::StatusV1
+                    | QueryTerm::StatusV2
                     | QueryTerm::VersionV1 => return None,
                 })
             })
@@ -224,6 +232,32 @@ fn accept(
             }));
         }
         Response::MemoryV1 {
+            generation: old, ..
+        } if old < generation => {}
+        Response::StatusV1 {
+            generation: found,
+            status,
+        } if found == generation => {
+            return Ok(Some(Reply {
+                status,
+                ..Reply::default()
+            }));
+        }
+        Response::StatusV1 {
+            generation: old, ..
+        } if old < generation => {}
+        Response::StatusV2 {
+            generation: found,
+            status,
+            detail,
+        } if found == generation => {
+            return Ok(Some(Reply {
+                status,
+                status_detail: Some(detail),
+                ..Reply::default()
+            }));
+        }
+        Response::StatusV2 {
             generation: old, ..
         } if old < generation => {}
         _ => return Err(PipeError::InvalidResponse),

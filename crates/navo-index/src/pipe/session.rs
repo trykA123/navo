@@ -203,6 +203,7 @@ fn send_replies(
             pipe.write_response(&version, Instant::now() + QUERY_TIMEOUT)?;
             continue;
         }
+        let status_v2 = query.request.wants_status_v2();
         let detailed_status = query.request.wants_status();
         let (reply, answered) = mpsc::sync_channel(1);
         if !answers.publish(Job {
@@ -215,7 +216,22 @@ fn send_replies(
         let Some(reply) = wait_for_reply(&answered, &cancel, session) else {
             continue;
         };
-        if detailed_status {
+        if status_v2 {
+            let detail = reply.status_detail.unwrap_or_else(|| {
+                reply
+                    .status
+                    .volumes
+                    .iter()
+                    .map(super::VolumeDetail::from_status)
+                    .collect()
+            });
+            let status = Response::StatusV2 {
+                generation: query.generation,
+                status: reply.status,
+                detail,
+            };
+            pipe.write_response(&status, Instant::now() + QUERY_TIMEOUT)?;
+        } else if detailed_status {
             let status = Response::StatusV1 {
                 generation: query.generation,
                 status: reply.status,
@@ -435,6 +451,7 @@ mod tests {
                 | Response::FolderTotalsV1 { generation, .. }
                 | Response::MemoryV1 { generation, .. }
                 | Response::StatusV1 { generation, .. }
+                | Response::StatusV2 { generation, .. }
                 | Response::VersionV1 { generation, .. } => *generation,
             };
             self.written

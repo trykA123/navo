@@ -18,6 +18,10 @@ impl Request {
     pub fn wants_status(&self) -> bool {
         matches!(self.terms.as_slice(), [QueryTerm::StatusV1])
     }
+
+    pub fn wants_status_v2(&self) -> bool {
+        matches!(self.terms.as_slice(), [QueryTerm::StatusV2])
+    }
 }
 
 pub(super) enum Failure {
@@ -26,10 +30,18 @@ pub(super) enum Failure {
 }
 
 impl Client {
-    /// Reads every volume's status with `total_files`; a service older than `StatusV1` drops
-    /// that request, so the status is read again through a plain query, without totals.
+    /// Reads every volume's status with `total_files`; asks `StatusV2` first and falls back to
+    /// `StatusV1` and then a plain query when talking to an older service.
     pub fn status(deadline: Instant) -> Result<Status, PipeError> {
-        read_status(|request, replies| exchange(request, replies, deadline))
+        Self::status_v2(deadline).map(|(status, _)| status)
+    }
+
+    /// Reads every volume's status and optional `StatusV2` detail; older services fall back to
+    /// `StatusV1` or a plain query with `None` detail.
+    pub fn status_v2(
+        deadline: Instant,
+    ) -> Result<(Status, Option<Vec<super::VolumeDetail>>), PipeError> {
+        read_status_v2(|request, replies| exchange(request, replies, deadline))
     }
 }
 
@@ -77,7 +89,30 @@ fn exchange_on(
         .collect()
 }
 
+pub(super) fn read_status_v2(
+    mut ask: impl FnMut(Request, usize) -> Result<Vec<Response>, Failure>,
+) -> Result<(Status, Option<Vec<super::VolumeDetail>>), PipeError> {
+    let v2 = Request {
+        terms: vec![QueryTerm::StatusV2],
+    };
+    match ask(v2, 1) {
+        Ok(responses) => decode_v2(responses).map(|(status, detail)| (status, Some(detail))),
+        Err(Failure::Connect(error))
+        | Err(Failure::Exchange(error @ (PipeError::TimedOut | PipeError::Cancelled))) => {
+            Err(error)
+        }
+        Err(Failure::Exchange(_)) => read_status_v1(ask).map(|status| (status, None)),
+    }
+}
+
+#[cfg(test)]
 fn read_status(
+    ask: impl FnMut(Request, usize) -> Result<Vec<Response>, Failure>,
+) -> Result<Status, PipeError> {
+    read_status_v2(ask).map(|(status, _)| status)
+}
+
+fn read_status_v1(
     mut ask: impl FnMut(Request, usize) -> Result<Vec<Response>, Failure>,
 ) -> Result<Status, PipeError> {
     let detailed = Request {
@@ -93,6 +128,21 @@ fn read_status(
             Ok(responses) => decode_plain(responses),
             Err(Failure::Connect(error) | Failure::Exchange(error)) => Err(error),
         },
+    }
+}
+
+fn decode_v2(responses: Vec<Response>) -> Result<(Status, Vec<super::VolumeDetail>), PipeError> {
+    match <[Response; 1]>::try_from(responses) {
+        Ok(
+            [
+                Response::StatusV2 {
+                    generation: 1,
+                    status,
+                    detail,
+                },
+            ],
+        ) => Ok((status, detail)),
+        _ => Err(PipeError::InvalidResponse),
     }
 }
 

@@ -30,10 +30,14 @@ pub(super) fn fetch(
         };
         pipe.query(options.clone(), query, &Cancel::new())
     };
-    let status = match ask(Vec::new(), 1) {
+    let status = match ask(vec![QueryTerm::StatusV2], 1) {
         PipeAnswer::Replied(reply) => reply.status,
         PipeAnswer::Absent => return Some(IndexProgress::default()),
-        PipeAnswer::Silent => return None,
+        PipeAnswer::Silent => match ask(Vec::new(), 1) {
+            PipeAnswer::Replied(reply) => reply.status,
+            PipeAnswer::Absent => return Some(IndexProgress::default()),
+            PipeAnswer::Silent => return None,
+        },
     };
     let memory = match ask(vec![QueryTerm::MemoryV1], 2) {
         PipeAnswer::Replied(reply) => reply.memory,
@@ -255,6 +259,31 @@ mod tests {
         }));
         let view = fetch(&queries, &no_folder_totals(), &options()).unwrap();
         assert_eq!((view.state(), view.memory), (IndexState::Building, None));
+    }
+
+    #[test]
+    fn an_old_service_that_drops_the_status_v2_request_still_shows_its_status() {
+        let saw_v2 = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let seen = saw_v2.clone();
+        let (queries, _) = pipe(Box::new(move |query| {
+            if query.request.terms.contains(&QueryTerm::StatusV2) {
+                seen.store(true, Ordering::SeqCst);
+                Err(PipeError::Io(std::io::ErrorKind::BrokenPipe.into()))
+            } else if query.request.terms.contains(&QueryTerm::MemoryV1) {
+                Ok(memory(4096))
+            } else {
+                Ok(building())
+            }
+        }));
+        let view = fetch(&queries, &no_folder_totals(), &options()).unwrap();
+        assert!(
+            saw_v2.load(Ordering::SeqCst),
+            "fetch must ask StatusV2 before falling back"
+        );
+        assert_eq!(
+            (view.state(), view.memory),
+            (IndexState::Building, Some(4096))
+        );
     }
 
     #[test]

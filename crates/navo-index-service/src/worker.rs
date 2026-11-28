@@ -227,11 +227,9 @@ impl Worker {
     fn publish_built(&mut self, index: NtfsIndex) {
         self.publish(index);
         self.clock.built(self.started.elapsed());
-        self.shared
-            .write()
-            .unwrap_or_else(PoisonError::into_inner)
-            .follow
-            .last_full_build = Some(Instant::now());
+        let mut state = self.shared.write().unwrap_or_else(PoisonError::into_inner);
+        state.follow.last_full_build = Some(Instant::now());
+        state.rebuild_due_at = None;
     }
 
     /// Attempts a regular full build and records its retry delay on error.

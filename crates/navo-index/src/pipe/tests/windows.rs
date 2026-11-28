@@ -86,6 +86,7 @@ fn pipe_round_trip_returns_top_500_paths_flags_and_status_in_order() {
                 total_files: None,
             }],
         },
+        ..Reply::default()
     };
     thread::scope(|scope| {
         let _stop = crate::pipe::StopOnDrop(stop.clone());
@@ -155,6 +156,7 @@ fn pipe_newer_generation_cancels_an_older_search_on_the_same_connection() {
                 indices: Vec::new(),
             }],
             status: Status::default(),
+            ..Reply::default()
         }
     };
     thread::scope(|scope| {

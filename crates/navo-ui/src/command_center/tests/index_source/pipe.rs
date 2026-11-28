@@ -132,6 +132,7 @@ fn an_updating_volume_without_hits_is_asked_again_and_then_shows_its_hits() {
                     ..VolumeStatus::default()
                 }],
             },
+            ..Reply::default()
         })
     }));
     let source = source(IndexMode::Service, hooks);

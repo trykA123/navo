@@ -319,8 +319,13 @@ impl Rebuilds {
         }
         if self.deferred.is_none() {
             self.deferred = Some(Deferred { cause, deadline });
-            update(shared, |builds| builds.deferred_rebuilds += 1);
-            let wait = (deadline - now).as_secs();
+            let wait_duration = deadline.saturating_sub(now);
+            {
+                let mut state = shared.write().unwrap_or_else(PoisonError::into_inner);
+                state.builds.deferred_rebuilds += 1;
+                state.rebuild_due_at = Some(Instant::now() + wait_duration);
+            }
+            let wait = wait_duration.as_secs();
             let class = cause
                 .unresolved
                 .map_or("", |unresolved| unresolved.class_field());
@@ -366,10 +371,14 @@ impl Rebuilds {
         } else if !self.journal_lost() {
             self.deferred = None;
         }
-        update(shared, |builds| {
-            builds.full_builds += 1;
-            builds.last_reason = Some(cause.reason);
-        });
+        {
+            let mut state = shared.write().unwrap_or_else(PoisonError::into_inner);
+            state.builds.full_builds += 1;
+            state.builds.last_reason = Some(cause.reason);
+            if !self.journal_lost() {
+                state.rebuild_due_at = None;
+            }
+        }
         self.log
             .line(format_args!("full build start {}: {cause}", self.letter));
     }

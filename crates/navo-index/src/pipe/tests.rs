@@ -152,6 +152,7 @@ fn oversized_hits_drop_from_the_tail_using_the_wire_size() {
             })
             .collect(),
         status: Status::default(),
+        ..super::Reply::default()
     };
     let response = super::prepare_hits(u64::MAX, &mut reply).unwrap();
     let encoded = frames::encode(&response).unwrap();

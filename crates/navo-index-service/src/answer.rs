@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex, PoisonError, RwLock, RwLockReadGuard, TryLockError};
 use std::time::{Duration, Instant};
 
 use navo_index::ntfs::NtfsIndex;
-use navo_index::pipe::{self, CancelToken, Hit, Reply, Request, VolumeBuilds, VolumeStatus};
+use navo_index::pipe::{
+    self, CancelToken, Hit, Reply, Request, VolumeBuilds, VolumeDetail, VolumeState, VolumeStatus,
+};
 
 use super::answer_stats::BUSY_REPLIES;
 use super::search::SearchIndex;
@@ -13,6 +15,8 @@ const READ_WAIT: Duration = Duration::from_millis(20);
 const ANSWER_BUDGET: Duration = Duration::from_millis(120);
 const READ_POLL: Duration = Duration::from_millis(1);
 const UPDATING: u8 = 100;
+/// Journal lag above 1 MiB marks a volume as `Behind` in `StatusV2`.
+const LAG_BEHIND_BYTES: u64 = 1024 * 1024;
 
 /// How long one answer waits for read locks: per volume and for all volumes together.
 #[derive(Clone, Copy)]
@@ -43,6 +47,8 @@ pub(super) struct State {
     pub(super) search: SearchIndex,
     pub(super) builds: VolumeBuilds,
     pub(super) follow: FollowStats,
+    /// Deadline of a deferred full rebuild, if one is waiting for the rebuild window.
+    pub(super) rebuild_due_at: Option<Instant>,
     /// A successful journal batch skipped a cycle that still needs verification.
     pub(super) replay_inexact: bool,
 }
@@ -52,12 +58,16 @@ pub(super) type Shared = Arc<RwLock<State>>;
 pub(super) struct SharedVolume {
     pub(super) shared: Shared,
     last: Mutex<VolumeStatus>,
+    last_detail: Mutex<VolumeDetail>,
 }
 
 impl SharedVolume {
     pub(super) fn new(state: State) -> Self {
+        let last = state.status.clone();
+        let last_detail = volume_detail(&state, &last, Instant::now());
         Self {
-            last: Mutex::new(state.status.clone()),
+            last: Mutex::new(last),
+            last_detail: Mutex::new(last_detail),
             shared: Arc::new(RwLock::new(state)),
         }
     }
@@ -83,28 +93,49 @@ fn answer_with(
         return super::memory::answer(volumes);
     }
     let mut reply = Reply::default();
-    let overall = Instant::now() + waits.budget;
+    let wants_v2 = request.wants_status_v2();
+    let mut details = wants_v2.then(|| Vec::with_capacity(volumes.len()));
+    let now = Instant::now();
+    let overall = now + waits.budget;
     for volume in volumes {
         if cancel.is_cancelled() {
             break;
         }
         // Each volume gets its own wait, so a slow first volume cannot starve the next one.
         let deadline = (Instant::now() + waits.read).min(overall);
-        let read = read_before(&volume.shared, deadline)
-            .map(|state| search(&state, request, cancel, &mut reply.hits));
+        let read = read_before(&volume.shared, deadline).map(|state| {
+            let status = search(&state, request, cancel, &mut reply.hits);
+            let detail = wants_v2.then(|| volume_detail(&state, &status, now));
+            (status, detail)
+        });
         let mut last = volume.last.lock().unwrap_or_else(PoisonError::into_inner);
-        let status = match read {
-            Some(status) => {
+        let mut last_detail = volume
+            .last_detail
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let (status, detail) = match read {
+            Some((status, detail)) => {
                 last.clone_from(&status);
-                status
+                if let Some(detail) = &detail {
+                    last_detail.clone_from(detail);
+                }
+                (status, detail)
             }
-            None => VolumeStatus {
-                progress: last.progress.or(Some(UPDATING)),
-                ..last.clone()
-            },
+            None => {
+                let status = VolumeStatus {
+                    progress: last.progress.or(Some(UPDATING)),
+                    ..last.clone()
+                };
+                let detail = wants_v2.then(|| busy_detail(&last_detail));
+                (status, detail)
+            }
         };
         reply.status.volumes.push(status);
+        if let (Some(list), Some(detail)) = (&mut details, detail) {
+            list.push(detail);
+        }
     }
+    reply.status_detail = details;
     reply.hits.sort_by(|left, right| {
         right
             .score
@@ -124,12 +155,52 @@ fn search(
     let mut status = state.status.clone();
     if let Some(index) = &state.index {
         status.entries = index.table.len() as u64;
-        if !request.wants_status() {
+        if !request.wants_status() && !request.wants_status_v2() {
             hits.extend(state.search.hits(&index.table, request, cancel));
         }
     }
     status.clamp_total();
     status
+}
+
+/// Builds the `StatusV2` per-volume detail from the live `State` and clamped `VolumeStatus`.
+fn volume_detail(state: &State, status: &VolumeStatus, now: Instant) -> VolumeDetail {
+    let rebuild_in_s = state
+        .rebuild_due_at
+        .map(|due| u32::try_from(due.saturating_duration_since(now).as_secs()).unwrap_or(u32::MAX));
+    let volume_state = if status.has_blocking_error() {
+        VolumeState::Stale
+    } else if rebuild_in_s.is_some() {
+        VolumeState::RebuildWaiting
+    } else if matches!(status.progress, Some(p) if p < UPDATING) {
+        VolumeState::Building
+    } else if state.follow.lag_bytes > LAG_BEHIND_BYTES {
+        VolumeState::Behind
+    } else if status.progress.is_some() {
+        VolumeState::Updating
+    } else {
+        VolumeState::Ready
+    };
+    VolumeDetail {
+        state: volume_state,
+        total_files: status.total_files,
+        lag_bytes: state.follow.lag_bytes,
+        rebuild_in_s,
+        full_builds: state.builds.full_builds,
+        last_full_build_age_s: state
+            .follow
+            .last_full_build
+            .map(|at| now.saturating_duration_since(at).as_secs()),
+    }
+}
+
+/// Marks a cached detail as `Updating` when the volume lock is held by a write, preserving higher states.
+fn busy_detail(last: &VolumeDetail) -> VolumeDetail {
+    let mut detail = last.clone();
+    if matches!(detail.state, VolumeState::Ready | VolumeState::Behind) {
+        detail.state = VolumeState::Updating;
+    }
+    detail
 }
 
 pub(super) fn read_before<T>(
@@ -318,5 +389,81 @@ mod tests {
         super::super::lifecycle::begin_build(&mut state.status, None);
         drop(state);
         assert_eq!(status_of(&volume).total_files, None);
+    }
+
+    fn status_v2_of(volume: &SharedVolume) -> pipe::VolumeDetail {
+        let request = Request {
+            terms: vec![pipe::QueryTerm::StatusV2],
+        };
+        let reply = answer(std::slice::from_ref(volume), &request, &CancelToken::new());
+        assert!(reply.hits.is_empty(), "StatusV2 never searches");
+        reply
+            .status_detail
+            .expect("StatusV2 must populate status_detail")
+            .remove(0)
+    }
+
+    #[test]
+    fn status_v2_maps_blocking_error_deferred_rebuild_and_lag() {
+        let stale = SharedVolume::new(State {
+            status: VolumeStatus {
+                root: "C:".into(),
+                errors: vec!["updating volume index: access denied".into()],
+                ..VolumeStatus::default()
+            },
+            rebuild_due_at: Some(Instant::now() + Duration::from_secs(300)),
+            follow: FollowStats {
+                lag_bytes: 2 * 1024 * 1024,
+                ..FollowStats::default()
+            },
+            ..State::default()
+        });
+        assert_eq!(status_v2_of(&stale).state, pipe::VolumeState::Stale);
+
+        let waiting = SharedVolume::new(State {
+            status: VolumeStatus {
+                root: "D:".into(),
+                errors: vec![format!("{}4", pipe::SIZES_UNKNOWN_PREFIX)],
+                ..VolumeStatus::default()
+            },
+            rebuild_due_at: Some(Instant::now() + Duration::from_secs(360)),
+            builds: VolumeBuilds {
+                full_builds: 2,
+                ..VolumeBuilds::default()
+            },
+            follow: FollowStats {
+                last_full_build: Some(Instant::now() - Duration::from_secs(90)),
+                ..FollowStats::default()
+            },
+            ..State::default()
+        });
+        let waiting_detail = status_v2_of(&waiting);
+        assert_eq!(waiting_detail.state, pipe::VolumeState::RebuildWaiting);
+        assert!(
+            waiting_detail
+                .rebuild_in_s
+                .is_some_and(|s| s > 0 && s <= 360)
+        );
+        assert_eq!(waiting_detail.full_builds, 2);
+        assert!(
+            waiting_detail
+                .last_full_build_age_s
+                .is_some_and(|s| s >= 90)
+        );
+
+        let behind = SharedVolume::new(State {
+            status: VolumeStatus {
+                root: "E:".into(),
+                ..VolumeStatus::default()
+            },
+            follow: FollowStats {
+                lag_bytes: 1024 * 1024 + 1,
+                ..FollowStats::default()
+            },
+            ..State::default()
+        });
+        let behind_detail = status_v2_of(&behind);
+        assert_eq!(behind_detail.state, pipe::VolumeState::Behind);
+        assert_eq!(behind_detail.lag_bytes, 1024 * 1024 + 1);
     }
 }
