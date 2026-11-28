@@ -65,7 +65,9 @@ pub fn main_window_options(title: impl Into<SharedString>, bounds: WindowBounds)
 #[derive(IntoElement)]
 pub struct NavoTitleBar {
     title: SharedString,
+    height: Option<Pixels>,
     header: Vec<AnyElement>,
+    inline_header: Option<AnyElement>,
     header_inset: Pixels,
     trailing: Vec<AnyElement>,
     is_on_mica: bool,
@@ -82,7 +84,9 @@ impl NavoTitleBar {
     pub fn new(title: impl Into<SharedString>) -> Self {
         Self {
             title: title.into(),
+            height: None,
             header: Vec::new(),
+            inline_header: None,
             header_inset: px(CENTRE_INSET),
             trailing: Vec::new(),
             is_on_mica: false,
@@ -94,8 +98,22 @@ impl NavoTitleBar {
         }
     }
 
+    /// Override the title bar height; defaults to `Theme::spacing.header_height`.
+    #[must_use]
+    pub fn height(mut self, height: Pixels) -> Self {
+        self.height = Some(height);
+        self
+    }
+
     pub fn header(mut self, content: impl IntoElement) -> Self {
         self.header.push(content.into_any_element());
+        self
+    }
+
+    /// Render `content` as an in-flow flex child between the brand mark and trailing controls.
+    #[must_use]
+    pub fn inline_header(mut self, content: impl IntoElement) -> Self {
+        self.inline_header = Some(content.into_any_element());
         self
     }
 
@@ -179,14 +197,31 @@ fn centre_area(t: &Theme, item: AnyElement, inset: Pixels) -> impl IntoElement {
         .child(held(item))
 }
 
-fn header_area(t: &Theme, items: impl Iterator<Item = AnyElement>) -> impl IntoElement {
+fn inline_header_area(t: &Theme, item: AnyElement) -> impl IntoElement {
     div()
+        .id("title-bar-header")
+        .test_support()
         .flex()
         .flex_1()
+        .min_w_0()
+        .overflow_hidden()
+        .items_center()
+        .mx(t.spacing.md)
+        .child(item)
+}
+
+fn header_area(
+    t: &Theme,
+    items: impl Iterator<Item = AnyElement>,
+    expand: bool,
+) -> impl IntoElement {
+    div()
+        .flex()
+        .when(expand, |area| area.flex_1().min_w_0())
+        .when(!expand, Styled::flex_none)
         .justify_end()
         .items_center()
         .gap(t.spacing.md)
-        .min_w_0()
         .mr(t.spacing.md)
         .children(items.map(held))
 }
@@ -194,10 +229,11 @@ fn header_area(t: &Theme, items: impl Iterator<Item = AnyElement>) -> impl IntoE
 impl RenderOnce for NavoTitleBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = tokens::current(cx);
+        let has_inline = self.inline_header.is_some();
         let mut items = self.header.into_iter();
-        let centre = items.next();
+        let centre = (!has_inline).then(|| items.next()).flatten();
         TitleBar::new()
-            .h(t.spacing.header_height)
+            .h(self.height.unwrap_or(t.spacing.header_height))
             .pl(t.spacing.md)
             .bg(t.colors.background)
             .border_color(t.colors.line)
@@ -219,8 +255,9 @@ impl RenderOnce for NavoTitleBar {
                 window.scale_factor(),
                 self.app_button,
             ))
+            .children(self.inline_header.map(|item| inline_header_area(t, item)))
             .children(centre.map(|item| centre_area(t, item, self.header_inset)))
-            .child(header_area(t, items.chain(self.trailing)))
+            .child(header_area(t, items.chain(self.trailing), !has_inline))
             .when_some(self.on_minimize, |bar, (label, handler)| {
                 bar.child(held(
                     IconButton::new("title-bar-minimize", IconName::WindowMinimize, label)

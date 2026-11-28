@@ -12,9 +12,7 @@ use crate::primitives::{IconButton, IconName, icon};
 use crate::title_bar::NavoTitleBar;
 use crate::tokens::{self, Theme};
 
-/// Horizontal inset reserved for the brand mark on the left and window controls on the right.
-const HEADER_INSET: f32 = 104.;
-/// Height of the search tab strip inside the title bar.
+/// Height of the search tab strip and compact find-window title bar.
 const STRIP_HEIGHT: f32 = 36.;
 /// Leading search / running glyph size inside each tab.
 const TAB_GLYPH_SIZE: f32 = 13.;
@@ -30,6 +28,8 @@ struct TabItem {
     hits: u32,
     running: bool,
     active: bool,
+    position: usize,
+    total: usize,
 }
 
 /// Shared handles passed to tab-strip mouse handlers.
@@ -56,9 +56,9 @@ impl FindWindow {
         let close_window = self.navo_window();
 
         NavoTitleBar::new(t!("find-title-empty"))
+            .height(px(STRIP_HEIGHT))
             .menu_arrow(false)
-            .header(tab_strip(tabs, strip_ctx, cx))
-            .header_inset(px(HEADER_INSET))
+            .inline_header(tab_strip(tabs, strip_ctx, cx))
             .trailing(pin_button(pinned, self.navo().clone()))
             .on_minimize(t!("find-window-minimize"), move |_, cx| {
                 let _ = min_navo.update(cx, |view, cx| view.hide_find(min_window, cx));
@@ -73,6 +73,7 @@ impl FindWindow {
 
 fn read_tabs(book: &FindBook) -> Vec<TabItem> {
     let active_index = book.active_index();
+    let total = book.tabs().len();
     let empty_label: SharedString = t!("find-window-new-tab").into();
     book.tabs()
         .iter()
@@ -89,6 +90,8 @@ fn read_tabs(book: &FindBook) -> Vec<TabItem> {
                 hits: tab.store.hit_total(),
                 running: tab.is_running(),
                 active: index == active_index,
+                position: index + 1,
+                total,
             }
         })
         .collect()
@@ -99,15 +102,25 @@ fn tab_strip(tabs: Vec<TabItem>, ctx: StripContext, cx: &App) -> impl IntoElemen
     div()
         .id("find-tab-strip")
         .role(Role::TabList)
+        .aria_label(t!("tabs-label"))
         .test_support()
         .h(px(STRIP_HEIGHT))
         .flex()
+        .flex_1()
         .items_center()
         .gap(theme.spacing.xs)
         .min_w_0()
-        .max_w_full()
-        .children(tabs.into_iter().map(|item| tab_pill(item, &ctx, cx)))
-        .child(add_tab_button(&ctx))
+        .overflow_hidden()
+        .child(
+            div()
+                .flex()
+                .min_w_0()
+                .overflow_hidden()
+                .items_center()
+                .gap(theme.spacing.xs)
+                .children(tabs.into_iter().map(|item| tab_pill(item, &ctx, cx))),
+        )
+        .child(div().flex_none().occlude().child(add_tab_button(&ctx)))
 }
 
 fn tab_pill(item: TabItem, ctx: &StripContext, cx: &App) -> impl IntoElement {
@@ -137,13 +150,19 @@ fn tab_pill(item: TabItem, ctx: &StripContext, cx: &App) -> impl IntoElement {
         .role(Role::Tab)
         .aria_selected(item.active)
         .aria_label(item.label.clone())
+        .aria_position_in_set(item.position)
+        .aria_size_of_set(item.total)
         .test_support()
+        .focusable()
+        .tab_stop(true)
+        .occlude()
         .flex()
         .items_center()
         .gap(t.spacing.xs)
         .h(t.spacing.tab_height)
         .px(t.spacing.sm)
         .min_w_0()
+        .overflow_hidden()
         .max_w(px(TAB_MAX_WIDTH))
         .rounded(t.radii.md)
         .border_1()
@@ -210,6 +229,9 @@ fn tab_close_button(id: u64, ctx: &StripContext, t: &Theme) -> impl IntoElement 
         .role(Role::Button)
         .aria_label(t!("tabs-close"))
         .test_support()
+        .focusable()
+        .tab_stop(true)
+        .occlude()
         .flex()
         .flex_none()
         .items_center()

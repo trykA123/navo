@@ -359,3 +359,53 @@ fn server_decorations_leave_the_window_buttons_to_the_window_manager(cx: &mut Te
     })
     .expect("window");
 }
+
+struct InlineShell;
+
+impl Render for InlineShell {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        use gpui_kit::InteractiveElement as _;
+        use gpui_kit::base::TestSupportExt as _;
+
+        let bar = NavoTitleBar::new("Search")
+            .height(px(36.))
+            .menu_arrow(false)
+            .inline_header(
+                div()
+                    .id("inline-strip")
+                    .test_support()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full(),
+            )
+            .trailing(
+                div()
+                    .id("inline-trailing")
+                    .test_support()
+                    .w(px(28.))
+                    .h(px(28.)),
+            );
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .child(bar)
+            .child(div().flex_1())
+    }
+}
+
+#[gpui_kit::test]
+fn height_and_inline_header_render_in_flow_between_brand_and_trailing(cx: &mut TestAppContext) {
+    let window = open_view(cx, || InlineShell);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let bar = window.find("title-bar").bounds();
+        let title = window.find("title-bar-title").bounds();
+        let header = window.find("title-bar-header").bounds();
+        let trailing = window.find("inline-trailing").bounds();
+        assert_eq!(bar.size.height, px(36.));
+        assert!(header.left() >= title.right());
+        assert!(header.right() <= trailing.left());
+    })
+    .expect("window");
+}
