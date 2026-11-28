@@ -35,6 +35,7 @@ gpui_kit::actions!(
         FocusActivity,
         FocusButtonBar,
         FocusCrashNotice,
+        FocusFindResults,
         LeaveWaiting,
         NewTab,
         OpenClipboard,
@@ -97,4 +98,5 @@ pub fn bind_keys(cx: &mut App) {
     super::preview::bind_keys(cx);
     super::compare_keys::bind_keys(cx);
     crate::commands::bind_namespace(cx, "navo_window");
+    crate::commands::bind_namespace(cx, "find_results");
 }

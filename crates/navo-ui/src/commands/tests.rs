@@ -9,7 +9,7 @@ use super::{
 use crate::app_menu::MenuCommand;
 use crate::host_os::HOST_OS;
 
-const NAMESPACES: [&str; 30] = [
+const NAMESPACES: [&str; 31] = [
     "activity_strip",
     "app_menu",
     "can_trace",
@@ -21,6 +21,7 @@ const NAMESPACES: [&str; 30] = [
     "dialog_focus",
     "drive_menu",
     "elf_view",
+    "find_results",
     "navo_tabs",
     "navo_window",
     "file_list",
@@ -585,6 +586,39 @@ const TESTER_LABELS: [&str; 3] = [
 fn tester_commands_exist_only_in_a_tester_build() {
     let present = all().any(|spec| TESTER_ONLY.contains(&spec.name));
     assert_eq!(present, cfg!(feature = "tester"));
+}
+
+#[test]
+fn find_results_commands_and_focus_root_are_registered() {
+    let focus = by_name("find_results.focus");
+    assert_eq!(
+        focus.map(|spec| (spec.action, spec.context, spec.label)),
+        Some((
+            Some("navo_window::FocusFindResults"),
+            GLOBAL,
+            "cmd-find-results-focus",
+        ))
+    );
+    assert!(
+        catalog().has("cmd-find-results-focus") && !tr("cmd-find-results-focus").trim().is_empty()
+    );
+
+    let in_find_results: Vec<_> = all().filter(|spec| spec.context == "FindResults").collect();
+    assert_eq!(in_find_results.len(), 27);
+    for spec in &in_find_results {
+        assert!(
+            spec.action
+                .is_some_and(|action| action.starts_with("find_results::")),
+            "unexpected action for {}",
+            spec.name
+        );
+        assert!(
+            catalog().has(spec.label) && !tr(spec.label).trim().is_empty(),
+            "missing or empty Fluent label for {}",
+            spec.name
+        );
+    }
+    assert!(super::focus_paths::knows("FindResults"));
 }
 
 #[cfg(feature = "tester")]

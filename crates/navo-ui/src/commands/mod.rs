@@ -4,6 +4,7 @@ mod clipboard;
 pub(crate) mod compare;
 pub(crate) use sidewise_ui::commands::compare_actions;
 mod contexts;
+mod find_results;
 pub(crate) mod focus_paths;
 pub(crate) mod git;
 mod keymap;
@@ -176,6 +177,7 @@ fn registry() -> impl Iterator<Item = CommandSpec> {
         user_commands::GROUPS.as_slice(),
         button_bar::GROUPS.as_slice(),
         terminal::GROUPS.as_slice(),
+        find_results::GROUPS.as_slice(),
     ];
     let actions = bound.into_iter().flatten().flat_map(|group| {
         group

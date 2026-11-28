@@ -1,0 +1,34 @@
+//! Actions for the floating find-results window.
+
+gpui_kit::actions!(
+    find_results,
+    [
+        Up,
+        Down,
+        PageUp,
+        PageDown,
+        First,
+        Last,
+        Reveal,
+        RevealAndLeave,
+        BackToNavo,
+        Copy,
+        Move,
+        SwapTarget,
+        View,
+        Mark,
+        OpenAsPaneTab,
+        NextTab,
+        PreviousTab,
+        NewTab,
+        CloseTab,
+        EditQuery,
+        RunAgain,
+        ToggleCase,
+        ToggleRegex,
+        ToggleGroups,
+        ToggleLines,
+        Keep,
+        Stop
+    ]
+);

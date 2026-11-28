@@ -29,13 +29,14 @@ const SHARED: [(&str, &str); 3] = [
 ];
 
 /// Contexts that are a root on screen although `PARENTS` nests them.
-const ROOTS: [&str; 6] = [
+const ROOTS: [&str; 7] = [
     "CompareView",
     "CompareStream",
     "ButtonBar",
     "ButtonBarEditor",
     "SettingsSheet",
     "Terminal",
+    "FindResults",
 ];
 
 /// True when the model has a fact about the context (a slot counts by its outermost part).

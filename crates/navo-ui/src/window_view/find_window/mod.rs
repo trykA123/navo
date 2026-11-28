@@ -1,5 +1,6 @@
 //! Owned floating find-results window host: lifecycle, placement and book ownership.
 
+pub(crate) mod keys;
 mod open;
 mod title;
 mod view;

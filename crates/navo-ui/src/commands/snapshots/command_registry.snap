@@ -530,6 +530,34 @@ button_bar_editor.duplicate | Duplicate button | ButtonBarEditor
 button_bar_editor.undo | Undo button bar edit | ButtonBarEditor
 button_bar_editor.done | Close button bar editor | ButtonBarEditor
 terminal.toggle | Toggle terminal | global
+find_results.focus | Go to find results | global
+find_results.up | Up | FindResults
+find_results.down | Down | FindResults
+find_results.page_up | Page up | FindResults
+find_results.page_down | Page down | FindResults
+find_results.first | First row | FindResults
+find_results.last | Last row | FindResults
+find_results.reveal | Reveal in pane | FindResults
+find_results.reveal_and_leave | Reveal and switch to Navo | FindResults
+find_results.back_to_navo | Switch to Navo | FindResults
+find_results.copy | Copy to target pane | FindResults
+find_results.move | Move to target pane | FindResults
+find_results.swap_target | Swap target pane | FindResults
+find_results.view | View file | FindResults
+find_results.mark | Mark file | FindResults
+find_results.open_as_pane_tab | Open as pane tab | FindResults
+find_results.next_tab | Next search tab | FindResults
+find_results.previous_tab | Previous search tab | FindResults
+find_results.new_tab | New search tab | FindResults
+find_results.close_tab | Close search tab | FindResults
+find_results.edit_query | Edit query | FindResults
+find_results.run_again | Run search again | FindResults
+find_results.toggle_case | Match case | FindResults
+find_results.toggle_regex | Regular expression | FindResults
+find_results.toggle_groups | Group by folder | FindResults
+find_results.toggle_lines | Show or hide match lines | FindResults
+find_results.keep | Save search or snapshot | FindResults
+find_results.stop | Stop search | FindResults
 window.new | New window | global
 workspace.list | Workspaces | global
 app.quit | Quit | global
