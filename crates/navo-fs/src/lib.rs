@@ -3,6 +3,7 @@
 
 pub mod archive;
 mod code_page;
+pub mod dupes;
 mod durable_replace;
 mod exists;
 mod fake;

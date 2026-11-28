@@ -15,9 +15,10 @@ flate2 = { version = "=1.1.11", default-features = false, features = ["rust_back
 ignore = "=0.4.34"
 lzma-rust2 = { version = "=0.25.0", default-features = false, features = ["optimization", "std", "xz"] }
 md-5 = "=0.11.0"
-ruzstd = { version = "=0.9.1", default-features = false, features = ["std"] }
 navo-core = { path = "../navo-core" }
 navo-git = { path = "../navo-git" }
+rayon = "=1.12.0"
+ruzstd = { version = "=0.9.1", default-features = false, features = ["std"] }
 sevenz-rust2 = { version = "=0.25.0", default-features = false }
 sha2 = "=0.11.1"
 sidewise-fs = { path = "../sidewise-fs" }
@@ -25,6 +26,7 @@ tar = { version = "=0.4.46", default-features = false }
 thiserror = "2.0.21"
 trash = "5.3.0"
 tracing = "0.1.44"
+xxhash-rust = { version = "=0.8.19", features = ["xxh3"] }
 zip = { version = "=9.5.0", default-features = false, features = ["deflate-flate2"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

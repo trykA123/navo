@@ -6438,6 +6438,7 @@ dependencies = [
  "navo-core",
  "navo-git",
  "proptest",
+ "rayon",
  "rustix",
  "ruzstd",
  "same-file",
@@ -6452,6 +6453,7 @@ dependencies = [
  "trash",
  "windows 0.62.2",
  "windows-sys 0.61.2",
+ "xxhash-rust",
  "zip",
 ]
 
