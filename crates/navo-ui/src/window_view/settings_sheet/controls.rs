@@ -80,42 +80,39 @@ fn problem_line(t: &Theme, problem: SharedString) -> impl IntoElement {
         .child(problem)
 }
 
-/// The typed editor: the hint, the text field and a Save button for the mouse.
-fn typed_entry(
-    field: Field,
-    input: &Entity<crate::primitives::TextFieldState>,
-    t: &Theme,
-    cx: &mut Context<NavoWindow>,
-) -> AnyElement {
-    let spec = field.spec();
-    let this = cx.weak_entity();
-    let save = Button::new("settings-edit-save", tr("settings-edit-save")).on_click(
-        move |_, window, cx| {
-            let _ = this.update(cx, |view, cx| view.commit_edit(window, cx));
-        },
-    );
-    div()
-        .flex()
-        .flex_col()
-        .flex_1()
-        .gap(t.spacing.sm)
-        .child(t!("settings-edit-hint", key = spec.key))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(t.spacing.sm)
-                .child(
-                    div()
-                        .flex_1()
-                        .child(TextField::new("settings-input", input, spec.label())),
-                )
-                .child(save),
-        )
-        .into_any_element()
-}
-
 impl NavoWindow {
+    /// The typed editor: the hint, the text field and a Save button for the mouse.
+    fn typed_editor_row(
+        &self,
+        field: Field,
+        input: &Entity<crate::primitives::TextFieldState>,
+        t: &Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let spec = field.spec();
+        let save = Button::new("settings-edit-save", tr("settings-edit-save"))
+            .on_click(self.settings_action(cx, |view, window, cx| view.commit_edit(window, cx)));
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .gap(t.spacing.sm)
+            .child(t!("settings-edit-hint", key = spec.key))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(t.spacing.sm)
+                    .child(div().flex_1().child(TextField::new(
+                        "settings-input",
+                        input,
+                        spec.label(),
+                    )))
+                    .child(save),
+            )
+            .into_any_element()
+    }
+
     /// The bottom bar: the open editor, else the status of the last change, else nothing.
     pub(super) fn edit_bar(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
         match &self.settings.edit {
@@ -125,24 +122,23 @@ impl NavoWindow {
     }
 
     fn editor(&self, edit: &TextEdit, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
-        let this = cx.weak_entity();
         let cancel = Button::new("settings-edit-cancel", tr("settings-edit-cancel"))
             .variant(ButtonVariant::Ghost)
-            .on_click(move |_, window, cx| {
-                let _ = this.update(cx, |view, cx| view.cancel_edit(window, cx));
-            });
+            .on_click(self.settings_action(cx, |view, window, cx| view.cancel_edit(window, cx)));
         let entry = match &edit.entry {
-            Entry::Typed { input, .. } => typed_entry(edit.field, input, t, cx),
+            Entry::Typed { input, .. } => self.typed_editor_row(edit.field, input, t, cx),
             Entry::Recorded(focus) => div()
                 .id("settings-record")
                 .role(Role::Status)
                 .aria_label(tr("settings-record-hint"))
                 .test_support()
                 .track_focus(focus)
-                .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
-                    cx.stop_propagation();
-                    view.record_key(&event.keystroke, window, cx);
-                }))
+                .on_key_down(self.settings_listener_stopping(
+                    cx,
+                    |view, event: &KeyDownEvent, window, cx| {
+                        view.record_key(&event.keystroke, window, cx);
+                    },
+                ))
                 .flex_1()
                 .text_color(t.colors.accent_text)
                 .child(tr("settings-record-hint"))
@@ -150,7 +146,9 @@ impl NavoWindow {
         };
         bar(t)
             .key_context(FIELD_CONTEXT)
-            .on_action(cx.listener(|view, _: &CancelEdit, window, cx| view.cancel_edit(window, cx)))
+            .on_action(self.settings_action::<CancelEdit>(cx, |view, window, cx| {
+                view.cancel_edit(window, cx);
+            }))
             .flex_col()
             .py(t.spacing.lg)
             .child(
@@ -174,13 +172,12 @@ impl NavoWindow {
         let text = status_text(status, &self.values);
         let can_undo = !self.settings.undo.is_empty();
         let undo = can_undo.then(|| {
-            let this = cx.weak_entity();
             Button::new("settings-status-undo", tr("settings-status-undo"))
                 .variant(ButtonVariant::Ghost)
                 .icon(IconName::RotateCcw)
-                .on_click(move |_, window, cx| {
-                    let _ = this.update(cx, |view, cx| view.undo_setting(window, cx));
-                })
+                .on_click(
+                    self.settings_action(cx, |view, window, cx| view.undo_setting(window, cx)),
+                )
         });
         let line = bar(t)
             .id("settings-status")

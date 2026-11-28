@@ -279,27 +279,52 @@ impl NavoWindow {
         }
     }
 
-    fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Closes Settings (either the floating Settings window or the overlay sheet).
+    pub(in crate::window_view) fn close_settings(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let was_window = self.settings.host.is_open();
+        self.reset_settings_on_close(was_window, cx);
+        if was_window {
+            window.activate_window();
+            self.settings.host.close(cx);
+        } else {
+            self.settings.sheet.update(cx, |sheet, cx| sheet.close(cx));
+            if std::mem::take(&mut self.settings.restore_preview) {
+                self.open_preview(window, cx);
+            }
+            self.focus_after_settings(window, cx);
+        }
+        cx.notify();
+    }
+
+    /// Clears transient Settings state on close and drops window-bound inputs.
+    pub(in crate::window_view) fn reset_settings_on_close(
+        &mut self,
+        drop_shortcuts: bool,
+        cx: &mut Context<Self>,
+    ) {
         self.settings.is_open = false;
         self.stop_index_progress();
+        self.settings.find = None;
         self.settings.edit = None;
         self.settings.waiting_locate = None;
         self.settings.is_history_cleared = false;
         self.settings.undo.clear();
         self.settings.filter = Filter::default();
-        self.clear_find(window, cx);
         self.settings.row = outer_row(self.settings.row);
         self.settings.folds = Folds::default();
         self.settings.diagnostics_open = false;
         self.settings.selected_diagnostic = None;
         self.settings.updates.reset_rollback_ui();
-        self.pause_shortcuts(cx);
-        self.settings.sheet.update(cx, |sheet, cx| sheet.close(cx));
-        if std::mem::take(&mut self.settings.restore_preview) {
-            self.open_preview(window, cx);
+        if drop_shortcuts {
+            self.settings.shortcuts = None;
+            self.settings.is_shortcuts = false;
+        } else {
+            self.pause_shortcuts(cx);
         }
-        self.focus_after_settings(window, cx);
-        cx.notify();
     }
 
     /// Returns focus to an open compare file diff, else to the focused pane.
@@ -310,13 +335,13 @@ impl NavoWindow {
     }
 
     pub(super) fn focus_settings(&self, window: &mut Window, cx: &mut App) {
-        match self.shown_shortcuts() {
-            Some(page) => {
-                let focus = page.read(cx).focus_handle(cx);
-                window.focus(&focus, cx);
-            }
-            None => window.focus(&self.settings.focus, cx),
-        }
+        let focus = match self.shown_shortcuts() {
+            Some(page) => page.read(cx).focus_handle(cx),
+            None => self.settings.focus.clone(),
+        };
+        self.settings
+            .host
+            .with_window_or(window, cx, |target, cx| target.focus(&focus, cx));
     }
 
     pub(super) fn settings_event(
@@ -376,12 +401,15 @@ impl NavoWindow {
         cx: &mut Context<Self>,
     ) {
         self.show_shortcuts(window, cx);
-        if let Some(page) = self.shown_shortcuts().cloned() {
+        let Some(page) = self.shown_shortcuts().cloned() else {
+            return;
+        };
+        self.settings.host.with_window_or(window, cx, |target, cx| {
             page.update(cx, |page, cx| {
-                page.set_query("", window, cx);
+                page.set_query("", target, cx);
                 page.select(command, cx);
             });
-        }
+        });
     }
 
     fn toggle_diagnostics_fold(&mut self) {

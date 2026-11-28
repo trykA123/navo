@@ -17,11 +17,18 @@ pub(super) struct Find {
 }
 
 impl NavoWindow {
-    pub(super) fn prepare_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Creates the Settings Find input bound to the active Settings window (or overlay).
+    pub(in crate::window_view) fn prepare_find(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.settings.find.is_some() {
             return;
         }
-        let input = text_field_state(PLACEHOLDER, window, cx);
+        let input = self.settings.host.with_window_or(window, cx, |target, cx| {
+            text_field_state(PLACEHOLDER, target, cx)
+        });
         let change = cx.subscribe_in(&input, window, |view, _, event: &InputEvent, _, cx| {
             if matches!(event, InputEvent::Change) {
                 view.find_changed(cx);
@@ -36,7 +43,10 @@ impl NavoWindow {
     pub(super) fn focus_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.prepare_find(window, cx);
         if let Some(find) = &self.settings.find {
-            window.focus(&find.input.read(cx).focus_handle(cx), cx);
+            let focus = find.input.read(cx).focus_handle(cx);
+            self.settings
+                .host
+                .with_window_or(window, cx, |target, cx| target.focus(&focus, cx));
         }
     }
 
@@ -94,8 +104,10 @@ impl NavoWindow {
 
     pub(super) fn clear_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(find) = &self.settings.find {
-            find.input
-                .update(cx, |state, cx| state.set_value(String::new(), window, cx));
+            let input = find.input.clone();
+            self.settings.host.with_window_or(window, cx, |target, cx| {
+                input.update(cx, |state, cx| state.set_value(String::new(), target, cx));
+            });
         }
         self.find_changed(cx);
     }
@@ -124,10 +136,10 @@ impl NavoWindow {
         let find = self.settings.find.as_ref()?;
         let bar = find_field(t, &find.input)
             .key_context(FIND_CONTEXT)
-            .on_action(cx.listener(|view, _: &ClearFind, window, cx| {
+            .on_action(self.settings_action::<ClearFind>(cx, |view, window, cx| {
                 view.escape_settings(window, cx);
             }))
-            .on_action(cx.listener(|view, _: &FindToList, window, cx| {
+            .on_action(self.settings_action::<FindToList>(cx, |view, window, cx| {
                 view.focus_settings(window, cx);
             }));
         Some(bar.into_any_element())

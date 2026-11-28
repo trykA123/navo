@@ -18,14 +18,11 @@ const MIN_W: f32 = 360.0;
 /// Smallest logical height of the Settings window.
 const MIN_H: f32 = 420.0;
 
-/// A Settings event handler running on Navo's own window.
-type SettingsHandler =
-    Rc<dyn Fn(&mut NavoWindow, &SheetEvent, &mut Window, &mut Context<NavoWindow>)>;
-
 /// Owns the floating Settings window handle and its hidden bookkeeping.
 #[derive(Default)]
 pub(in crate::window_view) struct SettingsHost {
     window: Option<WindowHandle<SettingsWindow>>,
+    main: Option<WindowHandle<NavoWindow>>,
     raw: Option<RawWindowHandle>,
     user_hidden: bool,
     follow_hidden: bool,
@@ -36,11 +33,18 @@ impl SettingsHost {
     pub(in crate::window_view) fn open(
         &mut self,
         window: WindowHandle<SettingsWindow>,
+        main: WindowHandle<NavoWindow>,
         raw: Option<RawWindowHandle>,
     ) {
         self.window = Some(window);
+        self.main = Some(main);
         self.raw = raw;
         self.user_hidden = false;
+    }
+
+    /// Returns Navo's window handle while the Settings window is open.
+    pub(in crate::window_view) fn main(&self) -> Option<WindowHandle<NavoWindow>> {
+        self.main
     }
 
     /// Shows and activates an already-open Settings window; false when none is live.
@@ -67,10 +71,6 @@ impl SettingsHost {
     }
 
     /// Runs `f` on the Settings window for window-bound entities and focus; None when closed.
-    #[allow(
-        dead_code,
-        reason = "window-bound entity helper wired by the follow-up settings-window atoms"
-    )]
     pub(in crate::window_view) fn with_window<R>(
         &self,
         cx: &mut App,
@@ -79,6 +79,23 @@ impl SettingsHost {
         let handle = self.window?;
         cx.update_window(handle.into(), |_, window, cx| f(window, cx))
             .ok()
+    }
+
+    /// Runs `f` on the Settings window when open and not already active as `fallback`,
+    /// else falls back to `fallback` (re-entrancy guard and overlay mode).
+    pub(in crate::window_view) fn with_window_or<R>(
+        &self,
+        fallback: &mut Window,
+        cx: &mut App,
+        mut f: impl FnMut(&mut Window, &mut App) -> R,
+    ) -> R {
+        if let Some(handle) = self.window
+            && fallback.window_handle() != AnyWindowHandle::from(handle)
+            && let Some(result) = self.with_window(cx, |window, cx| f(window, cx))
+        {
+            return result;
+        }
+        f(fallback, cx)
     }
 
     /// Closes the Settings window and clears all tracked state.
@@ -159,11 +176,15 @@ pub(super) fn update_navo<R>(
     .ok()?
 }
 
+type SettingsEventHandler<E> =
+    Rc<dyn Fn(&mut NavoWindow, &E, &mut Window, &mut Context<NavoWindow>)>;
+type SettingsActionHandler = Rc<dyn Fn(&mut NavoWindow, &mut Window, &mut Context<NavoWindow>)>;
+
 /// Runs one cloned Settings event on Navo's window; warns when Navo is already gone.
-fn deliver_event(
+fn deliver_event<E>(
     main: WindowHandle<NavoWindow>,
-    event: SheetEvent,
-    f: SettingsHandler,
+    event: E,
+    f: SettingsEventHandler<E>,
     cx: &mut App,
 ) {
     let delivered = update_navo(&main, cx, |navo, window, cx| f(navo, &event, window, cx));
@@ -172,19 +193,69 @@ fn deliver_event(
     }
 }
 
+/// Runs one Settings action or click handler on Navo's window; warns when Navo is gone.
+fn deliver_action(main: WindowHandle<NavoWindow>, f: SettingsActionHandler, cx: &mut App) {
+    let delivered = update_navo(&main, cx, |navo, window, cx| f(navo, window, cx));
+    if delivered.is_none() {
+        tracing::warn!("a settings action arrived after Navo's window closed");
+    }
+}
+
 impl NavoWindow {
-    /// Builds an `on_event` handler that routes one Settings event onto Navo's own window:
+    /// Builds an `on_event` handler that routes one cloned event onto Navo's own window:
     /// propagation stops synchronously, then the cloned event runs deferred on Navo.
-    pub(in crate::window_view) fn settings_listener(
+    pub(in crate::window_view) fn settings_listener<E: Clone + 'static>(
         main: WindowHandle<NavoWindow>,
-        f: impl Fn(&mut Self, &SheetEvent, &mut Window, &mut Context<Self>) + 'static,
-    ) -> impl Fn(&SheetEvent, &mut Window, &mut App) + 'static {
-        let f: SettingsHandler = Rc::new(f);
-        move |event: &SheetEvent, _window: &mut Window, cx: &mut App| {
+        f: impl Fn(&mut Self, &E, &mut Window, &mut Context<Self>) + 'static,
+    ) -> impl Fn(&E, &mut Window, &mut App) + 'static {
+        let f: SettingsEventHandler<E> = Rc::new(f);
+        move |event: &E, _window: &mut Window, cx: &mut App| {
             cx.stop_propagation();
             let event = event.clone();
             let f = Rc::clone(&f);
             cx.defer(move |cx| deliver_event(main, event, f, cx));
+        }
+    }
+
+    /// Builds a handler that stops propagation synchronously and routes onto Navo's window
+    /// when Settings runs in its own window, else runs directly on the overlay window.
+    pub(in crate::window_view) fn settings_listener_stopping<E: Clone + 'static>(
+        &self,
+        cx: &Context<Self>,
+        f: impl Fn(&mut Self, &E, &mut Window, &mut Context<Self>) + 'static,
+    ) -> impl Fn(&E, &mut Window, &mut App) + 'static {
+        let main = self.settings.host.main();
+        let this = cx.weak_entity();
+        let f: SettingsEventHandler<E> = Rc::new(f);
+        move |event: &E, window: &mut Window, cx: &mut App| {
+            cx.stop_propagation();
+            let f = Rc::clone(&f);
+            if let Some(main) = main {
+                let event = event.clone();
+                cx.defer(move |cx| deliver_event(main, event, f, cx));
+            } else {
+                let _ = this.update(cx, |navo, cx| f(navo, event, window, cx));
+            }
+        }
+    }
+
+    /// Builds an action or click handler that routes onto Navo's window when Settings runs
+    /// in its own window, else runs directly on the overlay window.
+    pub(in crate::window_view) fn settings_action<E: 'static>(
+        &self,
+        cx: &Context<Self>,
+        f: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+    ) -> impl Fn(&E, &mut Window, &mut App) + 'static {
+        let main = self.settings.host.main();
+        let this = cx.weak_entity();
+        let f: SettingsActionHandler = Rc::new(f);
+        move |_: &E, window: &mut Window, cx: &mut App| {
+            let f = Rc::clone(&f);
+            if let Some(main) = main {
+                cx.defer(move |cx| deliver_action(main, f, cx));
+            } else {
+                let _ = this.update(cx, |navo, cx| f(navo, window, cx));
+            }
         }
     }
 
@@ -211,21 +282,21 @@ impl NavoWindow {
             let Some((handle, settings_raw)) = open_the_window(navo.clone(), main, cx) else {
                 return;
             };
-            if navo
-                .update(cx, |navo, cx| {
-                    navo.settings.host.open(handle, settings_raw);
-                    navo.check_settings_owner(settings_raw, navo_raw);
-                    navo.focus_settings_content(cx);
-                    cx.notify();
-                })
-                .is_err()
+            if update_navo(&main, cx, |navo, window, cx| {
+                navo.settings.host.open(handle, main, settings_raw);
+                navo.check_settings_owner(settings_raw, navo_raw);
+                navo.prepare_find(window, cx);
+                navo.focus_settings_content(cx);
+                cx.notify();
+            })
+            .is_none()
             {
                 let _ = cx.update_window(handle.into(), |_, window, _| window.remove_window());
             }
         });
     }
 
-    /// Closes the floating Settings window, activating Navo first.
+    /// Closes the floating Settings window, dropping window-bound inputs and activating Navo.
     pub(in crate::window_view) fn close_settings_window(
         &mut self,
         window: &mut Window,
@@ -234,32 +305,27 @@ impl NavoWindow {
         if !self.settings.host.is_open() {
             return;
         }
-        window.activate_window();
-        self.settings.host.close(cx);
-        cx.notify();
+        self.close_settings(window, cx);
     }
 
-    /// Clears SettingsHost and activates Navo when the Settings window is closing itself.
+    /// Clears SettingsHost and window-bound inputs when the Settings window is closing itself.
     fn on_settings_window_closing(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.settings.host.is_open() {
             return;
         }
+        self.reset_settings_on_close(true, cx);
         window.activate_window();
         self.settings.host.clear();
         cx.notify();
     }
 
-    /// Handles one routed Settings event on Navo's window; Close closes the window.
+    /// Handles one routed Settings event on Navo's window; Close runs the escape chain first.
     fn settings_window_event(
         &mut self,
         event: &SheetEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if matches!(event, SheetEvent::Close) {
-            self.close_settings_window(window, cx);
-            return;
-        }
         self.settings_event(event.clone(), window, cx);
     }
 

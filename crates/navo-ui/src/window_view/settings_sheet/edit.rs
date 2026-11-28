@@ -91,28 +91,35 @@ fn combo_text(keystroke: &Keystroke) -> Option<String> {
     Some(parts.join("+"))
 }
 
-/// Builds a text field holding `current` that saves on Enter, and focuses it.
-fn typed_entry(
-    field: Field,
-    current: String,
-    window: &mut Window,
-    cx: &mut Context<NavoWindow>,
-) -> Entry {
-    let input = text_field_state(field.spec().label(), window, cx);
-    input.update(cx, |state, cx| state.set_value(current, window, cx));
-    let enter = cx.subscribe_in(&input, window, |view, _, event: &InputEvent, window, cx| {
-        if let InputEvent::PressEnter { .. } = event {
-            view.commit_edit(window, cx);
-        }
-    });
-    window.focus(&input.read(cx).focus_handle(cx), cx);
-    Entry::Typed {
-        input,
-        _enter: enter,
-    }
-}
-
 impl NavoWindow {
+    /// Builds a text field holding `current` that saves on Enter, and focuses it.
+    fn typed_entry(
+        &self,
+        field: Field,
+        current: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entry {
+        let label = field.spec().label();
+        let input = self.settings.host.with_window_or(window, cx, |target, cx| {
+            let input = text_field_state(label.clone(), target, cx);
+            input.update(cx, |state, cx| {
+                state.set_value(current.clone(), target, cx);
+            });
+            target.focus(&input.read(cx).focus_handle(cx), cx);
+            input
+        });
+        let enter = cx.subscribe_in(&input, window, |view, _, event: &InputEvent, window, cx| {
+            if let InputEvent::PressEnter { .. } = event {
+                view.commit_edit(window, cx);
+            }
+        });
+        Entry::Typed {
+            input,
+            _enter: enter,
+        }
+    }
+
     /// Opens the editor for a text, number or key field; other controls are ignored.
     pub(in crate::window_view) fn start_edit(
         &mut self,
@@ -127,10 +134,12 @@ impl NavoWindow {
         };
         let entry = if is_recorded(field) {
             let focus = cx.focus_handle();
-            window.focus(&focus, cx);
+            self.settings
+                .host
+                .with_window_or(window, cx, |target, cx| target.focus(&focus, cx));
             Entry::Recorded(focus)
         } else {
-            typed_entry(field, current, window, cx)
+            self.typed_entry(field, current, window, cx)
         };
         self.settings.edit = Some(TextEdit {
             field,

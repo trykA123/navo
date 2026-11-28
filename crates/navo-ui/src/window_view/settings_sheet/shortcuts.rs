@@ -35,7 +35,9 @@ impl NavoWindow {
         self.settings.edit = None;
         self.settings.notice = None;
         let focus = page.read(cx).focus_handle(cx);
-        window.focus(&focus, cx);
+        self.settings
+            .host
+            .with_window_or(window, cx, |target, cx| target.focus(&focus, cx));
     }
 
     fn shortcuts_entity(
@@ -48,10 +50,12 @@ impl NavoWindow {
         }
         let save = self.keymap.save.clone();
         let problem = self.keymap.problem.clone();
-        let page = cx.new(|cx| {
-            let mut page = ShortcutsPage::new(save, window, cx);
-            page.set_problem(problem, cx);
-            page
+        let page = self.settings.host.with_window_or(window, cx, |target, cx| {
+            cx.new(|cx| {
+                let mut page = ShortcutsPage::new(save.clone(), target, cx);
+                page.set_problem(problem.clone(), cx);
+                page
+            })
         });
         let events = cx.subscribe_in(&page, window, |view, _, event, window, cx| {
             view.shortcuts_event(event, window, cx);
