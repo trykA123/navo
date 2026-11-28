@@ -9,10 +9,12 @@ use memchr::memmem;
 
 use super::{Compiled, Kind};
 
-/// Hex digits of the byte offset that prefixes a formatted hex row.
+/// Minimum hex digits of the byte offset that prefixes a formatted hex row.
 const ROW_PREFIX: usize = 8;
-/// Characters one formatted hex byte takes: two digits and a leading space.
+/// Bytes one formatted hex byte takes: two digits and a leading space.
 const ROW_BYTE: usize = 3;
+/// Bytes one full formatted hex row carries before it wraps to the next row.
+const ROW_BYTES: usize = 16;
 
 impl Compiled {
     /// Collects the byte ranges of every match in `text`, replacing `out`.
@@ -70,6 +72,9 @@ fn char_end(text: &str, start: usize) -> usize {
 }
 
 /// Pushes a range per needle occurrence among the byte pairs of a formatted hex row.
+///
+/// `bytes.rs` writes one row per match, starting on the row where the match begins, so a needle
+/// either fits inside that row or continues past the last byte of a full 16-byte row.
 fn push_hex_row(text: &str, needle: &[u8], out: &mut Vec<Range<usize>>) {
     let Some(first) = row_bytes_start(text) else {
         return;
@@ -78,24 +83,49 @@ fn push_hex_row(text: &str, needle: &[u8], out: &mut Vec<Range<usize>>) {
         return;
     }
     let pattern = hex_pattern(needle);
-    let len = pattern.len();
-    for start in memmem::find_iter(text.as_bytes(), &pattern) {
-        let aligned = start >= first && (start - first).is_multiple_of(ROW_BYTE);
-        if aligned && start + len <= text.len() {
-            out.push(start..start + len);
+    let len = row_len(text, first);
+    let mut index = 0;
+    while index < len {
+        let take = needle.len().min(len - index);
+        let whole = take == needle.len();
+        let wraps = len == ROW_BYTES && !whole;
+        let width = take * ROW_BYTE - 1;
+        let text_at = token_span(text, first, index, take);
+        if (whole || wraps) && text_at == pattern.get(..width) {
+            let start = first + index * ROW_BYTE;
+            out.push(start..start + width);
+            index += take;
+        } else {
+            index += 1;
         }
     }
 }
 
+/// The text of `take` byte pairs starting at byte pair `index` of the row that starts at `first`.
+fn token_span(text: &str, first: usize, index: usize, take: usize) -> Option<&[u8]> {
+    let start = first + index * ROW_BYTE;
+    text.as_bytes().get(start..start + take * ROW_BYTE - 1)
+}
+
+/// The number of byte pairs written in the formatted hex row that starts at `first`.
+fn row_len(text: &str, first: usize) -> usize {
+    let Some(rest) = text.as_bytes().get(first..) else {
+        return 0;
+    };
+    rest.chunks(ROW_BYTE)
+        .take_while(|chunk| chunk.len() >= 2 && chunk[..2].iter().all(u8::is_ascii_hexdigit))
+        .count()
+}
+
 /// The offset of the first byte pair in a `"XXXXXXXX  4D 5A"` row, when the row has that shape.
+///
+/// `bytes.rs` writes at least 8 hex digits, so rows past 4 GiB keep their 9 or more digits.
 fn row_bytes_start(text: &str) -> Option<usize> {
-    let digits = text.get(..ROW_PREFIX)?;
-    if !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    let digits = text.bytes().take_while(u8::is_ascii_hexdigit).count();
+    if digits < ROW_PREFIX || !text.get(digits..)?.starts_with("  ") {
         return None;
     }
-    let rest = text.get(ROW_PREFIX..)?;
-    let skipped = rest.bytes().take_while(|byte| *byte == b' ').count();
-    (skipped > 0).then(|| ROW_PREFIX + skipped)
+    Some(digits + 2)
 }
 
 /// The upper-case `"4D 5A"` form of `needle`, as a formatted hex row writes it.

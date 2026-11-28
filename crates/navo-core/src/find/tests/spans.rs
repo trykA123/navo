@@ -84,6 +84,29 @@ fn hex_spans_cover_the_matching_byte_pairs() {
 }
 
 #[test]
+fn hex_spans_highlight_the_row_prefix_of_a_long_needle() {
+    let row = "00000000  4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00";
+    assert_eq!(
+        matched("hex:4D5A90000300000004000000FFFF0000AABBCCDD", row),
+        ["4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00"]
+    );
+}
+
+#[test]
+fn hex_spans_highlight_a_short_needle_wrapping_the_row_end() {
+    let row = "00000010  00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 4D 5A";
+    assert_eq!(matched("hex:4D5A9000", row), ["4D 5A"]);
+    assert!(spans_of("hex:4D5B9000", row).is_empty());
+}
+
+#[test]
+fn hex_spans_cover_rows_past_four_gibibytes() {
+    let row = "100000000  4D 5A 90 00";
+    assert_eq!(spans_of("hex:4D5A", row), vec![11..16]);
+    assert_eq!(matched("hex:4D5A", row), ["4D 5A"]);
+}
+
+#[test]
 fn empty_query_clears_existing_ranges() {
     let compiled = Compiled::new(&FindQuery::parse("")).unwrap();
     let mut out = vec![0..3, 5..8];
