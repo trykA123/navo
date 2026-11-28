@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use gpui_kit::TestAppContext;
+use gpui_kit::test::TestWindowExt;
+use gpui_kit::{AppContext as _, TestAppContext};
 use navo_core::paging::{ByteSource, Laid, TextLayout};
 use navo_fs::{HEX_SAVE_CHUNK, HexFileStamp, PagedFile, save_patched_file};
 
@@ -197,4 +198,49 @@ fn hex_edit_ctrl_s_refuses_when_file_changed_on_disk(cx: &mut TestAppContext) {
         "expected conflict notice in paged-status, got: {status}"
     );
     assert_eq!(fs::read(&path).expect("newer file untouched"), newer);
+}
+
+#[gpui_kit::test]
+fn hex_edit_ignores_edits_and_undo_while_save_is_in_flight(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("inflight.bin");
+    let original = counting_binary(512);
+    fs::write(&path, &original).expect("write fixture");
+
+    let (window, view) = window_with(cx, fake(), disk_hex_hooks(path.clone()), Kinds::builtin());
+    press(cx, window, &view, "down");
+    press(cx, window, &view, "f3");
+    redraw(cx, window);
+
+    press(cx, window, &view, "ctrl-e");
+    press(cx, window, &view, "a");
+    press(cx, window, &view, "b");
+    redraw(cx, window);
+    assert!(visible(cx, window, "hex-edit-dirty"));
+
+    // Press Ctrl+S without pumping the background executor yet: save_hex sets
+    // `hex_edit.saving = Some(...)` synchronously while the background write is pending.
+    // Pressing hex digits and Ctrl+Z before the save commits must be ignored.
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("ctrl-s", cx);
+        window.press("f", cx);
+        window.press("f", cx);
+        window.press("ctrl-z", cx);
+    })
+    .expect("window");
+
+    // Now let the background save finish and commit on the UI thread.
+    cx.run_until_parked();
+    redraw(cx, window);
+
+    assert!(
+        !visible(cx, window, "hex-edit-dirty"),
+        "overlay must be clean after in-flight save completes"
+    );
+    let saved = fs::read(&path).expect("read saved");
+    assert_eq!(saved[0], 0xAB);
+    assert_eq!(saved[1], 0x01);
+    let row0 = label(cx, window, ("paged-row", 0));
+    assert!(row0.contains("AB 01 02 03"), "got: {row0}");
 }

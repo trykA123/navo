@@ -202,7 +202,11 @@ impl PagedView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.is_hex_editing() || !self.focus.is_focused(window) || self.find.bar.is_some() {
+        if !self.is_hex_editing()
+            || self.hex_edit.saving.is_some()
+            || !self.focus.is_focused(window)
+            || self.find.bar.is_some()
+        {
             return;
         }
         let mods = event.keystroke.modifiers;

@@ -257,3 +257,22 @@ fn hex_patch_crash_or_replace_fault_leaves_original_intact_with_zero_temp_files(
     assert_eq!(fs::read(&target).expect("original intact"), original);
     assert_eq!(dir_entries(dir.path()), vec!["precious.bin".to_owned()]);
 }
+
+#[test]
+fn hex_patch_save_supports_255_byte_filename_without_enametoolong() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let long_name = format!("{}.bin", "a".repeat(251));
+    assert_eq!(long_name.len(), 255);
+    let target = dir.path().join(&long_name);
+    fs::write(&target, b"0123456789abcdef").expect("write 255-byte name fixture");
+    let stamp = HexFileStamp::from_path(&target).expect("initial stamp");
+
+    let mut patches = BTreeMap::new();
+    patches.insert(0, 0xEE);
+    save_patched_file(&target, &stamp, &patches).expect("save 255-byte filename");
+
+    let saved = fs::read(&target).expect("read saved");
+    assert_eq!(saved[0], 0xEE);
+    assert_eq!(&saved[1..], b"123456789abcdef");
+    assert_eq!(dir_entries(dir.path()), vec![long_name]);
+}

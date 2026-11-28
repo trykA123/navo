@@ -568,11 +568,11 @@ struct TempFileGuard {
 
 impl TempFileGuard {
     fn create(target: &Path) -> io::Result<Self> {
-        let name = target.file_name().unwrap_or_default().to_string_lossy();
         let pid = std::process::id();
         for _ in 0..16 {
             let seq = TEMP_SEQ.fetch_add(1, Ordering::Relaxed);
-            let path = target.with_file_name(format!(".{name}.hex-{pid}-{seq}.tmp"));
+            // Fixed-length sibling name stays well under 255-byte component limits.
+            let path = target.with_file_name(format!(".navo-hex-{pid}-{seq}.tmp"));
             match OpenOptions::new().write(true).create_new(true).open(&path) {
                 Ok(file) => {
                     return Ok(Self {
