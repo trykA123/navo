@@ -8,7 +8,7 @@ use memchr::memmem;
 use regex::{Regex, RegexBuilder};
 
 use super::{FindQuery, NameFilter};
-use decode::{bom_len, decode_line, snippet, wide_from_head};
+use decode::{Decoders, bom_len, snippet};
 
 mod bytes;
 mod decode;
@@ -20,6 +20,7 @@ const HIT_LIMIT: usize = 1000;
 pub struct Compiled {
     kind: Kind,
     name: Option<NameFilter>,
+    decoders: Decoders,
 }
 
 enum Kind {
@@ -36,7 +37,11 @@ impl Compiled {
         validate_query(query)?;
         let kind = compile_kind(query)?;
         let name = query.name.as_deref().map(NameFilter::new).transpose()?;
-        Ok(Self { kind, name })
+        Ok(Self {
+            kind,
+            name,
+            decoders: Decoders::new(&query.encodings),
+        })
     }
 
     /// The `name:` filter, when the query has one.
@@ -169,7 +174,7 @@ pub fn scan(
     if scanner.cancelled() || scanner.is_binary(&head) {
         return Ok(scanner.found);
     }
-    let skip = bom_len(scanner.wide);
+    let skip = bom_len(&head);
     scanner.push(&head[skip..]);
     let mut buffer = vec![0; CHUNK];
     while !scanner.cancelled() {
@@ -197,6 +202,7 @@ struct Scanner<'a> {
     compiled: &'a Compiled,
     cancel: &'a AtomicBool,
     wide: Option<&'static encoding_rs::Encoding>,
+    decoders: Decoders,
     pending: Vec<u8>,
     line: u64,
     found: FileHits,
@@ -204,11 +210,12 @@ struct Scanner<'a> {
 
 impl<'a> Scanner<'a> {
     fn new(head: &[u8], compiled: &'a Compiled, cancel: &'a AtomicBool) -> Self {
-        let wide = wide_from_head(head);
+        let wide = compiled.decoders.wide_from_head(head);
         Self {
             compiled,
             cancel,
             wide,
+            decoders: compiled.decoders,
             pending: Vec::new(),
             line: 1,
             found: FileHits::default(),
@@ -258,21 +265,31 @@ impl<'a> Scanner<'a> {
     }
 
     fn record_line(&mut self, bytes: &[u8]) {
-        let decoded = decode_line(bytes, self.wide);
-        let text = decoded.strip_suffix('\r').unwrap_or(&decoded);
+        let mut seen = Vec::new();
+        self.decoders.decode(bytes, self.wide, |decoded| {
+            self.visit_text(decoded.strip_suffix('\r').unwrap_or(decoded), &mut seen);
+        });
+    }
+
+    fn visit_text(&mut self, text: &str, seen: &mut Vec<u32>) {
         let mut previous = 0;
         let mut column = 0;
         self.compiled.visit(text, |start| {
             if self.cancel.load(Ordering::Relaxed) {
                 return false;
             }
+            column += text[previous..start].chars().count();
+            previous = start;
+            let at = u32::try_from(column + 1).unwrap_or(u32::MAX);
+            if seen.contains(&at) {
+                return true;
+            }
+            seen.push(at);
             self.found.total = self.found.total.saturating_add(1);
             if self.found.hits.len() < HIT_LIMIT {
-                column += text[previous..start].chars().count();
-                previous = start;
                 self.found.hits.push(LineHit {
                     line: self.line,
-                    column: u32::try_from(column + 1).unwrap_or(u32::MAX),
+                    column: at,
                     text: snippet(text, column),
                 });
             }

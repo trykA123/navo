@@ -1,4 +1,5 @@
 mod bytes;
+mod decode;
 mod docs;
 mod matcher;
 mod names;
