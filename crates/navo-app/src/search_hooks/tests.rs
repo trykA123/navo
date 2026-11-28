@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use navo_store::Db;
+use navo_store::{CollectionKind, Db, DbError, NewCollection};
+use navo_ui::window_view::SavedSearch;
 
 use super::hooks;
 
@@ -91,4 +92,132 @@ fn with_remember_off_stored_history_is_neither_used_nor_shown() {
     assert_eq!((hooks.frecent)(10).len(), 1);
     assert_eq!((hooks.command_use)().len(), 1);
     assert_eq!((hooks.recent_commands)(10).len(), 1);
+}
+
+#[test]
+fn save_search_and_saved_round_trip_with_optional_base() {
+    let hooks = hooks(Some(shared()), remembering());
+    let second = (hooks.find.save_search)("Rust files", "fn main", Some("/repo")).unwrap();
+    let first = (hooks.find.save_search)("All logs", "error", None).unwrap();
+    assert_eq!(
+        (hooks.find.saved)(),
+        vec![
+            SavedSearch {
+                id: first,
+                name: "All logs".to_owned(),
+                query: "error".to_owned(),
+                base: None,
+            },
+            SavedSearch {
+                id: second,
+                name: "Rust files".to_owned(),
+                query: "fn main".to_owned(),
+                base: Some("/repo".to_owned()),
+            },
+        ]
+    );
+}
+
+#[test]
+fn save_snapshot_stores_items_and_saved_filters_non_search_collections() {
+    let db = shared();
+    let hooks = hooks(Some(db.clone()), remembering());
+    let paths = vec!["/repo/b.rs".to_owned(), "/repo/a.rs".to_owned()];
+    let snapshot_id = (hooks.find.save_snapshot)("Snap", "needle", Some("/repo"), &paths).unwrap();
+    let search_id = (hooks.find.save_search)("Saved query", "needle", Some("/repo")).unwrap();
+    crate::files::lock(&db)
+        .create_collection(
+            &NewCollection {
+                name: "Manual picks",
+                kind: CollectionKind::Manual,
+                query: None,
+                base: None,
+            },
+            100,
+        )
+        .unwrap();
+
+    let saved = (hooks.find.saved)();
+    assert_eq!(
+        saved,
+        vec![SavedSearch {
+            id: search_id,
+            name: "Saved query".to_owned(),
+            query: "needle".to_owned(),
+            base: Some("/repo".to_owned()),
+        }]
+    );
+
+    let guard = crate::files::lock(&db);
+    let snapshot = guard
+        .list_collections()
+        .unwrap()
+        .into_iter()
+        .find(|item| item.id == snapshot_id)
+        .unwrap();
+    assert_eq!(snapshot.kind, CollectionKind::Snapshot);
+    assert_eq!(snapshot.query.as_deref(), Some("needle"));
+    assert_eq!(snapshot.base.as_deref(), Some("/repo"));
+    let stored_paths: Vec<String> = guard
+        .collection_items(snapshot_id)
+        .unwrap()
+        .into_iter()
+        .map(|item| item.location)
+        .collect();
+    assert_eq!(stored_paths, vec!["/repo/a.rs", "/repo/b.rs"]);
+}
+
+#[test]
+fn delete_saved_removes_a_saved_search() {
+    let hooks = hooks(Some(shared()), remembering());
+    let id = (hooks.find.save_search)("Temp", "needle", None).unwrap();
+    assert_eq!((hooks.find.saved)().len(), 1);
+    (hooks.find.delete_saved)(id).unwrap();
+    assert!((hooks.find.saved)().is_empty());
+}
+
+#[test]
+fn find_hooks_propagate_database_error_display_text() {
+    let db = shared();
+    let hooks = hooks(Some(db.clone()), remembering());
+    let blank = (hooks.find.save_search)("   ", "needle", None).unwrap_err();
+    assert_eq!(blank, DbError::InvalidCollectionName.to_string());
+
+    (hooks.find.save_search)("Unique", "first", None).unwrap();
+    let duplicate = (hooks.find.save_search)("Unique", "second", None).unwrap_err();
+    assert!(
+        duplicate.contains("database error:"),
+        "expected DbError Display text, got: {duplicate}"
+    );
+
+    crate::files::lock(&db)
+        .connection()
+        .execute_batch("DROP TABLE collection_items")
+        .unwrap();
+    let paths = vec!["/repo/a.rs".to_owned()];
+    let snapshot_err =
+        (hooks.find.save_snapshot)("Broken snap", "needle", None, &paths).unwrap_err();
+    assert!(
+        snapshot_err.contains("database error:"),
+        "expected DbError Display text, got: {snapshot_err}"
+    );
+    assert!(
+        crate::files::lock(&db)
+            .list_collections()
+            .unwrap()
+            .iter()
+            .all(|item| item.name != "Broken snap"),
+        "failed snapshot must not leave an orphan collection row"
+    );
+
+    crate::files::lock(&db)
+        .connection()
+        .execute_batch("DROP TABLE collections")
+        .unwrap();
+    let delete_err = (hooks.find.delete_saved)(1).unwrap_err();
+    assert!(
+        delete_err.contains("database error:"),
+        "expected DbError Display text, got: {delete_err}"
+    );
+    assert!((hooks.find.saved)().is_empty());
 }

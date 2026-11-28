@@ -1,3 +1,4 @@
+mod find;
 mod folder_totals;
 mod service;
 mod visits;
@@ -136,6 +137,7 @@ pub(crate) fn with_visits(
     let command_use = command_use(db.clone(), remember.clone());
     let frecent = frecent(db.clone(), visits.clone(), remember.clone());
     let clear_db = db.clone();
+    let find_db = db.clone();
     let recent_commands = recent_commands(db, remember.clone());
     let (remember_command, remember_visit) = (remember.clone(), remember);
     (
@@ -162,6 +164,7 @@ pub(crate) fn with_visits(
                     let _ = cleared.inspect_err(|error| report("clearing", error));
                 }
             }),
+            find: find::hooks(find_db),
             ..SearchHooks::none()
         },
         visits,
