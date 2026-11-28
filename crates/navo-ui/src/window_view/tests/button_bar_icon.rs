@@ -10,13 +10,15 @@ use image::{ExtendedColorType, ImageEncoder, Rgba, RgbaImage};
 use navo_icons::registry::registry;
 use navo_icons::spec::{BrandColour, Shape, TONES, Tone};
 
+use crate::primitives::{GPU_IMAGES, read_tally};
 use crate::tokens::{self, Mode, Theme, contrast_ratio};
 use crate::window_view::button_bar::BarIcon;
 use crate::window_view::button_bar::icon::{
     brand_or_theme, icon_element, letter_colours, tone_colour,
 };
 use crate::window_view::button_bar::raster_cache::{
-    MAX_CACHE_ENTRIES, RasterCache, bucket_px, png_image, svg_image,
+    MAX_CACHE_ENTRIES, MAX_PICKER_CACHE_ENTRIES, PickerRasterCache, RasterCache, bucket_px,
+    clear_picker_cache, png_image, svg_image, tinted_svg_image,
 };
 
 fn rgb_to_hsla([r, g, b]: [u8; 3]) -> gpui_kit::Hsla {
@@ -303,4 +305,72 @@ fn button_bar_icon_draws_each_kind(cx: &mut TestAppContext) {
             assert!(cache.contains(&png_bytes, bucket));
         });
     }
+}
+
+#[gpui_kit::test]
+fn button_bar_picker_raster_cache_caps_evicts_and_tints_pixels(cx: &mut TestAppContext) {
+    let tint = rgb_to_hsla([0x24, 0x88, 0xe0]);
+    let sample_mono = registry()
+        .body("lucide", "folder")
+        .expect("bundled lucide folder svg");
+
+    let tinted = cx.update(|cx| tinted_svg_image(&sample_mono, tint, px(20.), 1.0, cx));
+    let image = tinted.expect("rasterize tinted mono svg");
+    assert_eq!((image.size(0).width.0, image.size(0).height.0), (20, 20));
+    let bytes = image.as_bytes(0).expect("rendered bgra bytes");
+    let non_empty: Vec<[u8; 4]> = bytes
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .copied()
+        .filter(|px| px[3] > 0)
+        .collect();
+    assert!(
+        !non_empty.is_empty(),
+        "tinted icon must have visible pixels"
+    );
+    assert!(
+        non_empty
+            .iter()
+            .all(|[b, g, r, _]| (*b, *g, *r) == (0xe0, 0x88, 0x24)),
+        "visible pixels must carry the requested BGRA tint"
+    );
+
+    let total = MAX_PICKER_CACHE_ENTRIES + 30;
+    let mut svgs = Vec::with_capacity(total);
+    cx.update(|cx| {
+        clear_picker_cache(cx);
+        for idx in 0..total {
+            let doc = format!(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\">\
+                 <rect x=\"{}\" y=\"2\" width=\"10\" height=\"10\" fill=\"#000000\"/>\
+                 </svg>",
+                idx % 12
+            );
+            let unique = format!("{doc}<!-- {idx} -->").into_bytes();
+            let _ = tinted_svg_image(&unique, tint, px(20.), 1.0, cx).expect("cache insert");
+            svgs.push(unique);
+        }
+        let cache = cx.default_global::<PickerRasterCache>();
+        assert_eq!(cache.len(), MAX_PICKER_CACHE_ENTRIES);
+        assert!(!cache.contains(&svgs[0], 20, tint));
+        assert!(cache.contains(&svgs[total - 1], 20, tint));
+    });
+    cx.run_until_parked();
+    let live_items = cx.read(|cx| read_tally(&GPU_IMAGES, cx).items);
+    assert!(
+        live_items <= MAX_PICKER_CACHE_ENTRIES as u64,
+        "evicted picker images must be released (live={live_items})"
+    );
+
+    cx.update(clear_picker_cache);
+    cx.run_until_parked();
+    cx.read(|cx| {
+        assert_eq!(
+            cx.try_global::<PickerRasterCache>()
+                .map_or(0, PickerRasterCache::len),
+            0
+        );
+        assert_eq!(read_tally(&GPU_IMAGES, cx).items, 0);
+    });
 }

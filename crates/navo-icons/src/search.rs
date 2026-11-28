@@ -27,8 +27,24 @@ pub struct Hit {
 struct SetEntries {
     id: String,
     downloaded: bool,
-    names: Vec<String>,
-    tags: Vec<String>,
+    names_buf: String,
+    name_offsets: Vec<u32>,
+    tags_buf: String,
+    tag_offsets: Vec<u32>,
+}
+
+impl SetEntries {
+    fn len(&self) -> usize {
+        self.name_offsets.len().saturating_sub(1)
+    }
+
+    fn name(&self, idx: usize) -> &str {
+        slice_at(&self.names_buf, &self.name_offsets, idx)
+    }
+
+    fn tags(&self, idx: usize) -> &str {
+        slice_at(&self.tags_buf, &self.tag_offsets, idx)
+    }
 }
 
 /// Preloaded icon names and lower-cased tag lines for every set in a [`Registry`].
@@ -41,27 +57,19 @@ impl TagIndex {
     pub fn load(registry: &Registry) -> Self {
         let mut sets = Vec::new();
         for info in registry.sets() {
-            let names = registry.names(&info.id);
+            let expected = usize::try_from(info.count).unwrap_or(0);
+            let (names_buf, name_offsets) = pack_names(registry, &info.id, expected);
+            let count = name_offsets.len().saturating_sub(1);
             let downloaded = registry.is_downloaded(&info.id);
             let raw_tags = registry.tags(&info.id).unwrap_or_default();
-            let lowered = if is_lower_ascii(&raw_tags) {
-                raw_tags
-            } else {
-                raw_tags.to_lowercase()
-            };
-            let mut tags: Vec<String> = lowered
-                .lines()
-                .take(names.len())
-                .map(str::to_owned)
-                .collect();
-            if tags.len() < names.len() {
-                tags.resize_with(names.len(), String::new);
-            }
+            let (tags_buf, tag_offsets) = pack_tags(&raw_tags, count);
             sets.push(SetEntries {
                 id: info.id,
                 downloaded,
-                names,
-                tags,
+                names_buf,
+                name_offsets,
+                tags_buf,
+                tag_offsets,
             });
         }
         Self { sets }
@@ -92,10 +100,10 @@ pub fn search(index: &TagIndex, query: &str, filter: &SetFilter, per_set: usize)
             continue;
         }
         if words.is_empty() {
-            for name in set.names.iter().take(cap) {
+            for idx in 0..set.len().min(cap) {
                 out.push(Hit {
                     set: set.id.clone(),
-                    name: name.clone(),
+                    name: set.name(idx).to_owned(),
                 });
             }
             continue;
@@ -103,6 +111,50 @@ pub fn search(index: &TagIndex, query: &str, filter: &SetFilter, per_set: usize)
         collect_set_hits(set, &full_query, &words, cap, &mut out);
     }
     out
+}
+
+fn pack_names(registry: &Registry, set_id: &str, expected: usize) -> (String, Vec<u32>) {
+    let mut names_buf = String::with_capacity(expected.saturating_mul(16));
+    let mut name_offsets = Vec::with_capacity(expected.saturating_add(1));
+    name_offsets.push(0);
+    registry.for_each_name(set_id, |name| {
+        if let Ok(end) = u32::try_from(names_buf.len().saturating_add(name.len())) {
+            names_buf.push_str(name);
+            name_offsets.push(end);
+        }
+    });
+    names_buf.shrink_to_fit();
+    name_offsets.shrink_to_fit();
+    (names_buf, name_offsets)
+}
+
+fn pack_tags(raw_tags: &str, count: usize) -> (String, Vec<u32>) {
+    let lowered = to_lower_cow(raw_tags);
+    let mut tags_buf = String::with_capacity(lowered.len());
+    let mut tag_offsets = Vec::with_capacity(count.saturating_add(1));
+    tag_offsets.push(0);
+    for line in lowered.lines().take(count) {
+        if let Ok(end) = u32::try_from(tags_buf.len().saturating_add(line.len())) {
+            tags_buf.push_str(line);
+            tag_offsets.push(end);
+        } else {
+            tag_offsets.push(*tag_offsets.last().unwrap_or(&0));
+        }
+    }
+    let tail = *tag_offsets.last().unwrap_or(&0);
+    while tag_offsets.len() <= count {
+        tag_offsets.push(tail);
+    }
+    tags_buf.shrink_to_fit();
+    tag_offsets.shrink_to_fit();
+    (tags_buf, tag_offsets)
+}
+
+fn slice_at<'a>(buf: &'a str, offsets: &[u32], idx: usize) -> &'a str {
+    let (Some(&start), Some(&end)) = (offsets.get(idx), offsets.get(idx + 1)) else {
+        return "";
+    };
+    buf.get(start as usize..end as usize).unwrap_or("")
 }
 
 fn matches_filter(set: &SetEntries, filter: &SetFilter) -> bool {
@@ -121,10 +173,12 @@ fn collect_set_hits(
     out: &mut Vec<Hit>,
 ) {
     let mut ranked: Vec<(u8, &str)> = Vec::new();
-    for (name, tags) in set.names.iter().zip(set.tags.iter()) {
+    for idx in 0..set.len() {
+        let name = set.name(idx);
+        let tags = set.tags(idx);
         let lower_name = to_lower_cow(name);
         if let Some(rank) = rank_icon(&lower_name, tags, full_query, words) {
-            ranked.push((rank, name.as_str()));
+            ranked.push((rank, name));
         }
     }
     ranked.sort_unstable_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(right.1)));

@@ -71,17 +71,21 @@ pub(crate) fn letter_colours(shape: Shape, tone: Hsla, colors: &Colors) -> (Opti
     }
 }
 
+fn mono_colour(tone: Option<Tone>, brand: Option<[u8; 3]>, colors: &Colors) -> Hsla {
+    match (tone, brand) {
+        (Some(tone), _) => tone_colour(tone, colors),
+        (None, Some(rgb)) => brand_or_theme(Some(rgb), BrandColour::Brand, colors),
+        (None, None) => colors.text,
+    }
+}
+
 /// Builds a GPUI element of `side` x `side` for any resolved button bar icon variant.
 #[must_use]
 pub(crate) fn icon_element(icon: &BarIcon, side: Pixels, cx: &App) -> AnyElement {
     let t = tokens::current(cx);
     match icon {
         BarIcon::Mono { svg, tone, brand } => {
-            let color = match (tone, brand) {
-                (Some(tone), _) => tone_colour(*tone, &t.colors),
-                (None, Some(rgb)) => brand_or_theme(Some(*rgb), BrandColour::Brand, &t.colors),
-                (None, None) => t.colors.text,
-            };
+            let color = mono_colour(*tone, *brand, &t.colors);
             svg_element()
                 .data(svg)
                 .size(side)
@@ -127,6 +131,29 @@ pub(crate) fn icon_element(icon: &BarIcon, side: Pixels, cx: &App) -> AnyElement
         BarIcon::Glyph { svg, tone, dot } => glyph_element(svg, *tone, *dot, side, t),
         BarIcon::Missing { dashed } => missing_element(*dashed, side, t),
     }
+}
+
+/// Builds a picker preview element routed through the bounded, releasable `PickerRasterCache`.
+#[must_use]
+pub(crate) fn picker_icon_element(icon: &BarIcon, side: Pixels, cx: &App) -> AnyElement {
+    if let BarIcon::Mono { svg, tone, brand } = icon {
+        let color = mono_colour(*tone, *brand, &tokens::current(cx).colors);
+        let bytes = Arc::clone(svg);
+        return img(move |window: &mut Window, cx: &mut App| {
+            Some(raster_cache::tinted_svg_image(
+                &bytes,
+                color,
+                side,
+                window.scale_factor(),
+                cx,
+            ))
+        })
+        .size(side)
+        .flex_none()
+        .object_fit(ObjectFit::Contain)
+        .into_any_element();
+    }
+    icon_element(icon, side, cx)
 }
 
 fn letters_element(

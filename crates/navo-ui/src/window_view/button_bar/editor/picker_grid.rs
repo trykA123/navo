@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::rc::Rc;
 
-use gpui_kit::base::TestSupportExt;
+use gpui_kit::base::{Scrollbar, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement, Role,
@@ -19,7 +19,7 @@ use super::picker::PickerFilter;
 use crate::primitives::{ListScroll, RowSemantics, Tooltip, VirtualList};
 use crate::tokens::{self, Theme};
 use crate::window_view::NavoWindow;
-use crate::window_view::button_bar::icon::icon_element;
+use crate::window_view::button_bar::icon::picker_icon_element;
 
 pub(super) const ICONS_PER_ROW: usize = 8;
 pub(super) const CAP_PER_SET: usize = 48;
@@ -252,7 +252,8 @@ fn render_header_row(
         .test_support()
         .w_full()
         .h(px(GRID_ROW_HEIGHT))
-        .px(t.spacing.sm)
+        .pl(t.spacing.sm)
+        .pr(t.spacing.sm + Scrollbar::width())
         .flex()
         .items_center()
         .justify_between()
@@ -282,6 +283,8 @@ fn render_header_row(
         .when(!licence.is_empty(), |el| {
             el.child(
                 div()
+                    .id(("button-bar-picker-licence", row_index))
+                    .test_support()
                     .flex_none()
                     .px(t.spacing.xs)
                     .py(t.spacing.xxs)
@@ -310,7 +313,8 @@ fn render_icons_row(
         .id(("button-bar-picker-row", row_index))
         .w_full()
         .h(px(GRID_ROW_HEIGHT))
-        .px(t.spacing.xs)
+        .pl(t.spacing.xs)
+        .pr(t.spacing.xs + Scrollbar::width())
         .flex()
         .items_center()
         .gap(t.spacing.xs)
@@ -351,7 +355,7 @@ fn icon_cell(global_index: usize, set_id: &str, name: &str, ctx: &GridContext<'_
             let chosen = spec.clone();
             view.update(cx, |view, cx| view.pick_editor_icon(chosen, window, cx));
         })
-        .child(icon_element(&resolved, px(ICON_PREVIEW_PX), ctx.cx))
+        .child(picker_icon_element(&resolved, px(ICON_PREVIEW_PX), ctx.cx))
         .into_any_element()
 }
 
@@ -364,7 +368,8 @@ fn render_more_row(row_index: usize, t: &Theme) -> AnyElement {
         .test_support()
         .w_full()
         .h(px(GRID_ROW_HEIGHT))
-        .px(t.spacing.sm)
+        .pl(t.spacing.sm)
+        .pr(t.spacing.sm + Scrollbar::width())
         .flex()
         .items_center()
         .text_size(t.typography.small)

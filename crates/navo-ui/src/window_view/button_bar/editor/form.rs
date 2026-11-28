@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use gpui_kit::base::{ObservedElement, TestSupportExt};
+use gpui_kit::base::{ObservedElement, Scrollbar, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, Context, Div, FontWeight, InteractiveElement, IntoElement, ParentElement,
@@ -422,7 +422,8 @@ fn command_row(
         .test_support()
         .w_full()
         .h(px(ROW_HEIGHT))
-        .px(t.spacing.sm)
+        .pl(t.spacing.sm)
+        .pr(t.spacing.sm + Scrollbar::width())
         .rounded(t.radii.sm)
         .flex()
         .items_center()
@@ -439,7 +440,14 @@ fn command_row(
         .on_click(move |_, window, cx| on_pick(index, window, cx))
         .child(div().flex_1().min_w_0().truncate().child(row.label.clone()))
         .when_some(row.secondary.clone(), |el, extra| {
-            el.child(div().flex_none().text_color(secondary_color).child(extra))
+            el.child(
+                div()
+                    .id(("button-bar-form-secondary", index))
+                    .test_support()
+                    .flex_none()
+                    .text_color(secondary_color)
+                    .child(extra),
+            )
         })
         .into_any_element()
 }

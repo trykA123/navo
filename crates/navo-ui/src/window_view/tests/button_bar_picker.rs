@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use gpui_kit::base::Scrollbar;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, AppContext as _, Bounds, Entity, Point, Role, TestAppContext, WindowBounds,
@@ -11,8 +12,10 @@ use navo_icons::spec::{BrandColour, IconSpec, Shape, Tone};
 
 use super::super::keys::EditButtonBar;
 use super::{NavoWindow, fake, home_beside_dest, options_for, press, settle, type_in};
+use crate::primitives::{GPU_IMAGES, read_tally};
 use crate::settings::{Change, Field, Value, Values};
 use crate::tokens::{self, Mode};
+use crate::window_view::button_bar::raster_cache::{MAX_PICKER_CACHE_ENTRIES, PickerRasterCache};
 use crate::window_view::{
     BarEdit, BarIcon, ButtonAction, ButtonBarHooks, ButtonBarNews, ButtonBarSender, ButtonItem,
     DraftAction, ItemDraft, ItemPath, OpenHooks, ProgramId, SettingsHooks, StartOptions,
@@ -488,4 +491,93 @@ fn button_bar_picker_handles_downloaded_empty_and_separator_guard(cx: &mut TestA
         assert!(window.try_find("button-bar-picker").is_none());
     })
     .expect("downloaded empty and separator guard");
+}
+
+#[gpui_kit::test]
+fn button_bar_editor_lists_clear_scrollbar_gutter(cx: &mut TestAppContext) {
+    let rig = open_picker_rig(cx, Mode::Dark, (1400., 900.));
+    let button = bar_item("Refresh", ButtonAction::Navo("files.refresh".to_owned()), 1);
+    load_and_open_editor(cx, &rig, vec![button]);
+
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+        let picker_list = window.find("button-bar-picker-list").bounds();
+        let licence = window.find(("button-bar-picker-licence", 0usize)).bounds();
+        assert!(
+            licence.right() <= picker_list.right() - Scrollbar::width(),
+            "picker licence pill {:?} overlaps scrollbar gutter of {:?}",
+            licence.right(),
+            picker_list.right() - Scrollbar::width(),
+        );
+
+        let navo_list = window.find("button-bar-form-navo-list").bounds();
+        let cmd_id = window.find(("button-bar-form-secondary", 0usize)).bounds();
+        assert!(
+            cmd_id.right() <= navo_list.right() - Scrollbar::width(),
+            "navo command id {:?} overlaps scrollbar gutter of {:?}",
+            cmd_id.right(),
+            navo_list.right() - Scrollbar::width(),
+        );
+    })
+    .expect("scrollbar gutter check");
+}
+
+#[gpui_kit::test]
+fn button_bar_picker_caches_bounded_previews_and_clears_on_close(cx: &mut TestAppContext) {
+    let rig = open_picker_rig(cx, Mode::Dark, (1400., 900.));
+    let button = bar_item("Refresh", ButtonAction::Navo("files.refresh".to_owned()), 1);
+    load_and_open_editor(cx, &rig, vec![button]);
+
+    cx.update_window(rig.window, |_, window, cx| {
+        window.render_frame(cx);
+    })
+    .expect("render open picker");
+    cx.run_until_parked();
+
+    let cached_open = cx.read(|cx| {
+        cx.try_global::<PickerRasterCache>()
+            .map_or(0, PickerRasterCache::len)
+    });
+    assert!(
+        cached_open > 0 && cached_open <= MAX_PICKER_CACHE_ENTRIES,
+        "open picker should populate bounded PickerRasterCache, got {cached_open}"
+    );
+
+    cx.update_window(rig.window, |_, window, cx| {
+        window.click("button-bar-picker-filter-tabler", cx);
+        window.render_frame(cx);
+        window.click("button-bar-picker-tab-maker", cx);
+        window.render_frame(cx);
+        window.click("button-bar-maker-mode-glyph", cx);
+        window.render_frame(cx);
+    })
+    .expect("switch to tabler and maker glyph grid");
+    cx.run_until_parked();
+
+    let cached_maker = cx.read(|cx| {
+        cx.try_global::<PickerRasterCache>()
+            .map_or(0, PickerRasterCache::len)
+    });
+    assert!(
+        cached_maker > 0 && cached_maker <= MAX_PICKER_CACHE_ENTRIES,
+        "maker glyph grid should populate bounded PickerRasterCache, got {cached_maker}"
+    );
+
+    press(cx, rig.window, &rig.view, "escape");
+    cx.run_until_parked();
+
+    cx.read(|cx| {
+        let remaining = cx
+            .try_global::<PickerRasterCache>()
+            .map_or(0, PickerRasterCache::len);
+        assert_eq!(
+            remaining, 0,
+            "close_button_bar_editor must clear PickerRasterCache"
+        );
+        assert_eq!(
+            read_tally(&GPU_IMAGES, cx).items,
+            0,
+            "close_button_bar_editor must release all picker GPU images"
+        );
+    });
 }

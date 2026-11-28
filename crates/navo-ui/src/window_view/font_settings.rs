@@ -42,6 +42,7 @@ impl NavoWindow {
             kit.radius = radius;
             tokens::map_contrast_colors(&theme, &mut kit.colors);
         });
+        super::button_bar::raster_cache::clear_picker_cache(cx);
     }
 }
 

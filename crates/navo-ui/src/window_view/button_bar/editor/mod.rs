@@ -26,6 +26,7 @@ use navo_l10n::tr;
 use actions::default_button_draft;
 
 use super::ItemPath;
+use super::raster_cache;
 use super::state::{ButtonBarEditorState, EditorPane};
 use crate::primitives::{Button, ButtonVariant};
 use crate::tokens::{self, Theme};
@@ -113,6 +114,7 @@ impl NavoWindow {
         cx: &mut Context<Self>,
     ) {
         if self.button_bar.editor.take().is_some() {
+            raster_cache::clear_picker_cache(cx);
             self.button_bar.picker_generation = self.button_bar.picker_generation.wrapping_add(1);
             self.button_bar.get_more_generation =
                 self.button_bar.get_more_generation.wrapping_add(1);

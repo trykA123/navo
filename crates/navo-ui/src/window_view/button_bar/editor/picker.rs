@@ -25,6 +25,7 @@ use crate::primitives::{
 use crate::tokens::Theme;
 use crate::window_view::NavoWindow;
 use crate::window_view::button_bar::ButtonAction;
+use crate::window_view::button_bar::raster_cache;
 use crate::window_view::button_bar::state::ButtonBarEditorState;
 
 /// Top-level tab inside the icon picker pane (`Sets`, `Maker`, or `Import`).
@@ -478,6 +479,7 @@ impl NavoWindow {
         {
             editor.picker.filter = filter;
             editor.picker.refresh_rows(cx);
+            raster_cache::clear_picker_cache(cx);
             cx.notify();
         }
     }
@@ -485,6 +487,7 @@ impl NavoWindow {
     fn toggle_picker_brand_colour(&mut self, cx: &mut Context<Self>) {
         if let Some(editor) = self.button_bar.editor.as_mut() {
             editor.picker.brand_colour = !editor.picker.brand_colour;
+            raster_cache::clear_picker_cache(cx);
             cx.notify();
         }
     }
@@ -494,6 +497,7 @@ impl NavoWindow {
             && editor.picker.tab != tab
         {
             editor.picker.tab = tab;
+            raster_cache::clear_picker_cache(cx);
             cx.notify();
         }
     }

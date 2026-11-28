@@ -230,6 +230,53 @@ fn search_filter_downloaded() {
 }
 
 #[test]
+fn search_handles_empty_tags_and_short_tag_lists() {
+    let bytes = pack_bytes(&[(
+        "sparse",
+        vec![
+            icon("alpha-one", &[]),
+            icon("beta-two", &["first-tag", "second-tag"]),
+            icon("gamma-three", &[]),
+        ],
+    )]);
+    let reg = registry_from_bytes(bytes);
+    let index = TagIndex::load(&reg);
+
+    let all = search(&index, "", &SetFilter::All, 10);
+    let all_names: Vec<&str> = all.iter().map(|hit| hit.name.as_str()).collect();
+    assert_eq!(all_names, vec!["alpha-one", "beta-two", "gamma-three"]);
+
+    let zero_cap = search(&index, "alpha", &SetFilter::All, 0);
+    assert!(zero_cap.is_empty());
+
+    let tag_hit = search(&index, "second-tag", &SetFilter::All, 10);
+    assert_eq!(
+        tag_hit,
+        vec![Hit {
+            set: "sparse".to_owned(),
+            name: "beta-two".to_owned(),
+        }]
+    );
+
+    let multi_word = search(
+        &index,
+        "beta second",
+        &SetFilter::Set("sparse".to_owned()),
+        1,
+    );
+    assert_eq!(
+        multi_word,
+        vec![Hit {
+            set: "sparse".to_owned(),
+            name: "beta-two".to_owned(),
+        }]
+    );
+
+    let no_match = search(&index, "gamma second", &SetFilter::All, 10);
+    assert!(no_match.is_empty());
+}
+
+#[test]
 fn search_load_budget() {
     let reg = registry();
     let started = Instant::now();

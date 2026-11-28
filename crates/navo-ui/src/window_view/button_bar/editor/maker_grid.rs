@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use gpui_kit::base::TestSupportExt;
+use gpui_kit::base::{Scrollbar, TestSupportExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, App, Context, Entity, InteractiveElement, IntoElement, ParentElement, Role,
@@ -16,7 +16,7 @@ use crate::primitives::{ListScroll, RowSemantics, Tooltip, VirtualList};
 use crate::tokens::{self, Theme};
 use crate::window_view::NavoWindow;
 use crate::window_view::button_bar::BarIcon;
-use crate::window_view::button_bar::icon::icon_element;
+use crate::window_view::button_bar::icon::picker_icon_element;
 
 const GLYPH_ROW_HEIGHT: f32 = 36.;
 const GLYPH_CELL_HEIGHT: f32 = 30.;
@@ -102,7 +102,8 @@ fn render_glyph_row(
         .id(("button-bar-maker-glyph-row", row_idx))
         .w_full()
         .h(px(GLYPH_ROW_HEIGHT))
-        .px(t.spacing.xs)
+        .pl(t.spacing.xs)
+        .pr(t.spacing.xs + Scrollbar::width())
         .flex()
         .items_center()
         .gap(t.spacing.xs)
@@ -162,6 +163,6 @@ fn glyph_cell(
             let next = chosen.clone();
             view.update(cx, |view, cx| view.set_maker_glyph(next, cx));
         })
-        .child(icon_element(&icon, px(GLYPH_CELL_ICON_PX), cx))
+        .child(picker_icon_element(&icon, px(GLYPH_CELL_ICON_PX), cx))
         .into_any_element()
 }

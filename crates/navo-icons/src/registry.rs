@@ -246,18 +246,30 @@ impl Registry {
 
     /// Returns all icon names in `set` in pack order, or an empty list if `set` is absent.
     pub fn names(&self, set: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        self.for_each_name(set, |name| out.push(name.to_owned()));
+        out
+    }
+
+    /// Visits every icon name in `set` in pack order without per-name `String` allocations.
+    pub(crate) fn for_each_name(&self, set: &str, mut visit: impl FnMut(&str)) {
         if let Some(pack) = &self.bundled
             && pack.sets().iter().any(|info| info.id == set)
         {
-            return pack.names(set).into_iter().map(str::to_owned).collect();
+            for name in pack.names(set) {
+                visit(name);
+            }
+            return;
         }
         let Some(bytes) = self.downloaded_bytes(set) else {
-            return Vec::new();
+            return;
         };
         let Ok(pack) = Pack::open(&bytes) else {
-            return Vec::new();
+            return;
         };
-        pack.names(set).into_iter().map(str::to_owned).collect()
+        for name in pack.names(set) {
+            visit(name);
+        }
     }
 
     /// Returns whether `set` is provided by a loaded downloaded pack.
