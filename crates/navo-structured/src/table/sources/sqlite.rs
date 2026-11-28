@@ -248,18 +248,29 @@ fn should_retry_immutable(err: &rusqlite::Error) -> bool {
 ///
 /// `immutable=1` avoids creating `-shm` sidecar files in unwritable directories and sees
 /// checkpointed data only.
-fn sqlite_immutable_uri(path: &Path) -> Option<String> {
+pub(super) fn sqlite_immutable_uri(path: &Path) -> Option<String> {
     let raw = path.to_str()?;
     let normalized = raw.replace('\\', "/");
-    let mut uri = String::with_capacity(normalized.len() + 32);
-    if normalized.starts_with('/') {
-        uri.push_str("file://");
+    let (prefix, body) = if let Some(rest) = strip_verbatim_unc(&normalized) {
+        ("file://", rest)
+    } else if let Some(rest) = normalized.strip_prefix("//?/") {
+        if rest.as_bytes().get(1) == Some(&b':') {
+            ("file:///", rest)
+        } else {
+            ("file://", rest)
+        }
+    } else if let Some(rest) = normalized.strip_prefix("//") {
+        ("file://", rest)
+    } else if normalized.starts_with('/') {
+        ("file://", normalized.as_str())
     } else if normalized.as_bytes().get(1) == Some(&b':') {
-        uri.push_str("file:///");
+        ("file:///", normalized.as_str())
     } else {
-        uri.push_str("file:");
-    }
-    for byte in normalized.bytes() {
+        ("file:", normalized.as_str())
+    };
+    let mut uri = String::with_capacity(prefix.len() + body.len() + 32);
+    uri.push_str(prefix);
+    for byte in body.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'_' | b'.' | b'~' | b':') {
             uri.push(char::from(byte));
         } else {
@@ -268,6 +279,13 @@ fn sqlite_immutable_uri(path: &Path) -> Option<String> {
     }
     uri.push_str("?mode=ro&immutable=1");
     Some(uri)
+}
+
+/// Strips a Windows verbatim UNC prefix (`//?/UNC/` case-insensitively).
+fn strip_verbatim_unc(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix("//?/")?;
+    let head = rest.get(..4)?;
+    head.eq_ignore_ascii_case("unc/").then(|| &rest[4..])
 }
 
 /// Collects column names from `stmt`, capped at `MAX_COLUMNS`.

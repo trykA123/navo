@@ -345,3 +345,29 @@ fn opens_wal_database_in_read_only_directory_without_creating_shm() {
         "opening WAL db in read-only dir must not create -shm"
     );
 }
+
+#[test]
+fn sqlite_immutable_uri_handles_unix_drive_unc_and_verbatim_paths() {
+    use super::sqlite::sqlite_immutable_uri;
+
+    assert_eq!(
+        sqlite_immutable_uri(Path::new("/tmp/a b?c#d%20.db")).as_deref(),
+        Some("file:///tmp/a%20b%3Fc%23d%2520.db?mode=ro&immutable=1")
+    );
+    assert_eq!(
+        sqlite_immutable_uri(Path::new(r"C:\data\test#1.db")).as_deref(),
+        Some("file:///C:/data/test%231.db?mode=ro&immutable=1")
+    );
+    assert_eq!(
+        sqlite_immutable_uri(Path::new(r"\\server\share\sub\foo.db")).as_deref(),
+        Some("file://server/share/sub/foo.db?mode=ro&immutable=1")
+    );
+    assert_eq!(
+        sqlite_immutable_uri(Path::new(r"\\?\C:\data\foo.db")).as_deref(),
+        Some("file:///C:/data/foo.db?mode=ro&immutable=1")
+    );
+    assert_eq!(
+        sqlite_immutable_uri(Path::new(r"\\?\UNC\server\share\foo.db")).as_deref(),
+        Some("file://server/share/foo.db?mode=ro&immutable=1")
+    );
+}
