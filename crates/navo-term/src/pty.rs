@@ -142,6 +142,9 @@ impl PtyBackend {
             outbox: Arc::clone(&outbox),
         };
         let pty_writer = Arc::new(PtyWriter::new(shell.kind, nonce, Box::new(backend)));
+        if let Some(init) = hook.and_then(ShellHook::init) {
+            pty_writer.attach_init(init);
+        }
         let prompt_sink = Arc::new(PromptSink::for_writer(&pty_writer, sink));
         if let Err(error) = output::deliver(&outbox, prompt_sink) {
             outbox.close();
@@ -173,7 +176,10 @@ impl PtyBackend {
 
 fn command(shell: &ShellSpec, cwd: &Path, hook: Option<&ShellHook>) -> CommandBuilder {
     let mut command = CommandBuilder::new(&shell.program);
-    command.args(&shell.args);
+    // Git Bash's hook replaces `--login -i`: bash ignores --init-file in a login shell.
+    if !hook.is_some_and(ShellHook::replaces_args) {
+        command.args(&shell.args);
+    }
     if let Some(hook) = hook {
         command.args(hook.args());
         for (key, value) in hook.env() {

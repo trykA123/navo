@@ -2,8 +2,10 @@
 //! Every write to the PTY goes through `PtyWriter` under the same mutex as `PromptState`, so
 //! user keystrokes, manual sync and automatic pending-sync retries can never interleave.
 
+mod init;
 mod nonce;
 mod osc133;
+mod posix;
 mod shell;
 
 use std::collections::VecDeque;
@@ -14,6 +16,7 @@ use std::time::Instant;
 use parking_lot::Mutex;
 
 use crate::{Backend, ShellKind, Sink, Size, TermError};
+use init::TempInit;
 use osc133::{MAX_COMMAND_LEN, Osc133Event, Osc133Parser};
 
 pub use nonce::Nonce;
@@ -80,6 +83,8 @@ struct WriterInner {
     typed_line_dirty: bool,
     marks: VecDeque<PromptMark>,
     last_exit_code: Option<i32>,
+    /// Temp shell init files; dropped (and deleted) on the first trusted `133;A`.
+    init: Option<Arc<TempInit>>,
 }
 
 impl WriterInner {
@@ -249,6 +254,8 @@ impl WriterInner {
         if !trusted {
             return;
         }
+        // The shell has read its init file; delete the temp files while holding the lock.
+        self.init = None;
         self.record_mark(MarkKind::PromptStart, line, at);
         self.clear_typed_preview();
         self.state = PromptState::AtPrompt { typed: false };
@@ -329,8 +336,15 @@ impl PtyWriter {
                 typed_line_dirty: false,
                 marks: VecDeque::new(),
                 last_exit_code: None,
+                init: None,
             }),
         }
+    }
+
+    /// Shares ownership of the hook's temp init files so they are deleted on the first
+    /// trusted `133;A` and, failing that, when the session drops.
+    pub(crate) fn attach_init(&self, init: Arc<TempInit>) {
+        self.inner.lock().init = Some(init);
     }
 
     /// Writes user bytes atomically after updating prompt state under the writer lock.

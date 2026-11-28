@@ -1,6 +1,7 @@
 #[cfg(unix)]
 mod close;
 mod grid;
+mod hooks;
 mod prompt;
 mod session;
 mod shells;

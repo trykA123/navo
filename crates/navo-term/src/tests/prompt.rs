@@ -449,7 +449,7 @@ fn prompt_nonce_is_128_bit_hex_random_and_redacted_in_debug() {
 }
 
 #[test]
-fn prompt_shell_hooks_cover_pwsh_windows_powershell_and_cmd_only() {
+fn prompt_shell_hooks_cover_pwsh_windows_powershell_and_cmd() {
     let nonce = Nonce::from_hex(TEST_NONCE);
 
     for kind in [ShellKind::Pwsh, ShellKind::WindowsPowerShell] {
@@ -479,17 +479,10 @@ fn prompt_shell_hooks_cover_pwsh_windows_powershell_and_cmd_only() {
         )]
     );
 
-    for kind in [
-        ShellKind::Bash,
-        ShellKind::Zsh,
-        ShellKind::Fish,
-        ShellKind::GitBash,
-        ShellKind::Wsl,
-        ShellKind::Other,
-    ] {
-        let spec = shell_spec(kind, "sh", &[]);
-        assert!(ShellHook::for_shell(&spec, &nonce).is_none());
-    }
+    // NV12e integrates bash, zsh, fish, Git Bash and WSL (see tests::hooks); only
+    // unrecognized shells stay unintegrated.
+    let spec = shell_spec(ShellKind::Other, "sh", &[]);
+    assert!(ShellHook::for_shell(&spec, &nonce).is_none());
 }
 
 #[test]

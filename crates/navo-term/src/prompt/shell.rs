@@ -1,16 +1,23 @@
-//! Shell prompt-hook injection and safe folder-sync quoting for supported shells
-//! (`pwsh`, Windows PowerShell and `cmd.exe`). No user profile files are modified.
+//! Shell prompt-hook injection and safe folder-sync quoting for supported shells.
+//! PowerShell and cmd hooks live here; bash, zsh, fish, Git Bash and WSL in `posix`.
+//! No user profile files are modified.
 
 use std::path::Path;
+use std::sync::Arc;
 
-use super::{Nonce, SyncWait};
+use super::init::TempInit;
+use super::{Nonce, SyncWait, posix};
 use crate::shells::{ShellKind, ShellSpec};
 
 /// Extra launch arguments and environment variables injected when spawning an integrated shell.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default)]
 pub struct ShellHook {
-    extra_args: Vec<String>,
-    extra_env: Vec<(String, String)>,
+    pub(super) extra_args: Vec<String>,
+    pub(super) extra_env: Vec<(String, String)>,
+    /// When true, `args()` replaces the detected shell arguments instead of appending.
+    pub(super) replace_args: bool,
+    /// Owner-only temp init files, deleted after the first trusted prompt or on drop.
+    pub(super) init: Option<Arc<TempInit>>,
 }
 
 impl ShellHook {
@@ -29,6 +36,8 @@ impl ShellHook {
                         powershell_prompt_script(nonce),
                     ],
                     extra_env: Vec::new(),
+                    replace_args: false,
+                    init: None,
                 })
             }
             ShellKind::Cmd => Some(Self {
@@ -37,13 +46,15 @@ impl ShellHook {
                     String::from("PROMPT"),
                     format!("$E]133;A;navo={}$E\\$P$G", nonce.as_str()),
                 )],
+                replace_args: false,
+                init: None,
             }),
-            ShellKind::GitBash
-            | ShellKind::Wsl
-            | ShellKind::Bash
-            | ShellKind::Zsh
-            | ShellKind::Fish
-            | ShellKind::Other => None,
+            ShellKind::Bash => posix::bash_hook(shell, nonce),
+            ShellKind::GitBash => posix::git_bash_hook(shell, nonce),
+            ShellKind::Zsh => posix::zsh_hook(shell, nonce),
+            ShellKind::Fish => posix::fish_hook(shell, nonce),
+            ShellKind::Wsl => posix::wsl_hook(shell, nonce),
+            ShellKind::Other => None,
         }
     }
 
@@ -56,6 +67,22 @@ impl ShellHook {
     pub fn env(&self) -> &[(String, String)] {
         &self.extra_env
     }
+
+    /// Whether `args()` replaces the detected shell arguments instead of appending.
+    pub fn replaces_args(&self) -> bool {
+        self.replace_args
+    }
+
+    /// The temp init files' shared owner, if this hook created any.
+    pub(crate) fn init(&self) -> Option<Arc<TempInit>> {
+        self.init.clone()
+    }
+
+    /// The temp init file handed to the shell, if any (tests only).
+    #[cfg(test)]
+    pub(crate) fn init_path(&self) -> Option<&Path> {
+        self.init.as_ref().map(|init| init.file())
+    }
 }
 
 /// Formats a shell command that changes directory to `folder`, or rejects unsafe names.
@@ -63,12 +90,10 @@ pub fn quote_sync_command(kind: ShellKind, folder: &Path) -> Result<String, Sync
     match kind {
         ShellKind::Pwsh | ShellKind::WindowsPowerShell => quote_powershell(folder),
         ShellKind::Cmd => quote_cmd(folder),
-        ShellKind::GitBash
-        | ShellKind::Wsl
-        | ShellKind::Bash
-        | ShellKind::Zsh
-        | ShellKind::Fish
-        | ShellKind::Other => Err(SyncWait::NeedsIntegration),
+        ShellKind::Bash | ShellKind::Zsh | ShellKind::Fish => posix::quote_posix(folder),
+        ShellKind::GitBash => posix::quote_git_bash(folder),
+        ShellKind::Wsl => posix::quote_wsl(folder),
+        ShellKind::Other => Err(SyncWait::NeedsIntegration),
     }
 }
 
@@ -93,7 +118,7 @@ fn quote_cmd(folder: &Path) -> Result<String, SyncWait> {
     Ok(format!("cd /d \"{text}\"\r"))
 }
 
-fn valid_utf8_path(folder: &Path) -> Result<&str, SyncWait> {
+pub(super) fn valid_utf8_path(folder: &Path) -> Result<&str, SyncWait> {
     let text = folder.to_str().ok_or(SyncWait::UnusualName)?;
     if text.is_empty()
         || text
