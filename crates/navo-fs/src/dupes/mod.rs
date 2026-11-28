@@ -168,21 +168,54 @@ impl DupesSource for LocalDupesSource {
 
     fn open_read(&self, location: &Location) -> Result<Box<dyn DupesRead>, FsError> {
         let path = os_path(location)?;
-        let file = File::open(&path).map_err(|error| {
-            let os_code = error.raw_os_error();
-            let kind = match error.kind() {
-                std::io::ErrorKind::NotFound => FsErrorKind::NotFound,
-                std::io::ErrorKind::PermissionDenied => FsErrorKind::AccessDenied,
-                _ => FsErrorKind::Unknown,
-            };
-            FsError {
-                kind,
-                location: Some(location.clone()),
-                os_code,
-                holders: Vec::new(),
-            }
-        })?;
+        let file = open_read_guarded(&path).map_err(|error| map_open_error(&error, location))?;
         Ok(Box::new(file))
+    }
+}
+
+/// Opens `path` read-only with OS-level guards against Stage 1 -> Stage 2/3 TOCTOU races
+/// (`FILE_FLAG_OPEN_NO_RECALL | FILE_FLAG_SEQUENTIAL_SCAN` on Windows, `O_NOFOLLOW` on Unix).
+fn open_read_guarded(path: &std::path::Path) -> std::io::Result<File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_FLAG_OPEN_NO_RECALL, FILE_FLAG_SEQUENTIAL_SCAN,
+        };
+
+        options.custom_flags(FILE_FLAG_OPEN_NO_RECALL | FILE_FLAG_SEQUENTIAL_SCAN);
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+
+        options.custom_flags(rustix::fs::OFlags::NOFOLLOW.bits().cast_signed());
+    }
+
+    options.open(path)
+}
+
+fn map_open_error(error: &std::io::Error, location: &Location) -> FsError {
+    let os_code = error.raw_os_error();
+    #[cfg(windows)]
+    let mapped = os_code.map(|code| FsErrorKind::from_windows_code(code.cast_unsigned()));
+    #[cfg(not(windows))]
+    let mapped = os_code.map(FsErrorKind::from_errno);
+    let kind = mapped.unwrap_or_else(|| match error.kind() {
+        std::io::ErrorKind::NotFound => FsErrorKind::NotFound,
+        std::io::ErrorKind::PermissionDenied => FsErrorKind::AccessDenied,
+        _ => FsErrorKind::Unknown,
+    });
+    FsError {
+        kind,
+        location: Some(location.clone()),
+        os_code,
+        holders: Vec::new(),
     }
 }
 

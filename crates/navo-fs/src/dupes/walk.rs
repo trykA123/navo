@@ -100,16 +100,25 @@ impl WalkState<'_> {
                 // Never follow symlinks, junctions, or mount-point reparse points.
                 self.summary.skipped_links += 1;
             }
-            EntryKind::Folder => match folder.join(&entry.name) {
-                Ok(child) => {
-                    self.summary.scanned_folders += 1;
-                    children.push(child);
-                }
-                Err(_) => self.summary.skipped_errors += 1,
-            },
+            EntryKind::Folder => self.take_folder(folder, &entry, children),
             EntryKind::File => self.take_file(folder, entry),
         }
         ControlFlow::Continue(())
+    }
+
+    fn take_folder(&mut self, folder: &Location, entry: &FsEntry, children: &mut Vec<Location>) {
+        // NV4a guard: never list or recall an online-only cloud placeholder folder.
+        if entry.attributes.cloud_placeholder {
+            self.summary.skipped_placeholders += 1;
+            return;
+        }
+        match folder.join(&entry.name) {
+            Ok(child) => {
+                self.summary.scanned_folders += 1;
+                children.push(child);
+            }
+            Err(_) => self.summary.skipped_errors += 1,
+        }
     }
 
     fn take_file(&mut self, folder: &Location, entry: FsEntry) {

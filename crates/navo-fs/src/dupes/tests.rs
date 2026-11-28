@@ -141,6 +141,24 @@ impl FakeDupesSource {
         location
     }
 
+    fn add_cloud_folder(&mut self, parent: &Location, name: &str) -> Location {
+        let path = ProviderPath::from_text(name);
+        let location = parent.join(&path).unwrap();
+        let entry = FsEntry {
+            name: path,
+            kind: EntryKind::Folder,
+            size: 0,
+            modified_ms: Some(1_000),
+            attributes: Attributes {
+                cloud_placeholder: true,
+                ..Attributes::default()
+            },
+        };
+        self.folders.entry(parent.clone()).or_default().push(entry);
+        self.folders.entry(location.clone()).or_default();
+        location
+    }
+
     fn list_calls(&self) -> usize {
         self.list_calls.load(Ordering::SeqCst)
     }
@@ -798,4 +816,81 @@ fn fingerprint_identities_are_not_mistaken_for_hard_links_and_break_stops_stream
         "fingerprint identities must not suppress duplicates"
     );
     assert_eq!(summary.duplicate_groups, 1);
+}
+
+#[test]
+fn cloud_placeholder_folder_is_skipped_without_listing_or_recalling() {
+    let root = fake_root("/onedrive");
+    let mut source = FakeDupesSource::new(DriveClass::Ssd);
+    source.add_folder(&root);
+
+    let cloud_dir = source.add_cloud_folder(&root, "online_only_dir");
+    let payload = vec![0x42_u8; 16 * 1024];
+    source.add_file(
+        &cloud_dir,
+        "remote_a.bin",
+        payload.clone(),
+        Some(native_id(1, 101)),
+        Attributes::default(),
+    );
+    source.add_file(
+        &cloud_dir,
+        "remote_b.bin",
+        payload.clone(),
+        Some(native_id(1, 102)),
+        Attributes::default(),
+    );
+    source.add_file(
+        &root,
+        "local.bin",
+        payload,
+        Some(native_id(1, 103)),
+        Attributes::default(),
+    );
+
+    let (groups, summary) = collect_groups(
+        &source,
+        &root,
+        &DuplicateOptions::default(),
+        &CancelToken::new(),
+    )
+    .unwrap();
+
+    assert!(
+        groups.is_empty(),
+        "files inside a cloud placeholder folder must never produce duplicate groups"
+    );
+    assert_eq!(
+        source.list_calls(),
+        1,
+        "only root may be listed; cloud placeholder folder must never be recalled"
+    );
+    assert_eq!(summary.skipped_placeholders, 1);
+    assert_eq!(summary.scanned_folders, 0);
+    assert_eq!(source.open_calls(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn local_open_read_refuses_symlink_with_o_nofollow() {
+    use super::LocalDupesSource;
+
+    let temp = TempDir::new().unwrap();
+    let target = temp.path().join("target.bin");
+    let link = temp.path().join("link.bin");
+    std::fs::write(&target, b"secret payload").unwrap();
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    let source = LocalDupesSource::new();
+    assert!(
+        source.open_read(&local_location(&target)).is_ok(),
+        "opening a regular file must succeed"
+    );
+
+    let link_loc = local_location(&link);
+    let err = source
+        .open_read(&link_loc)
+        .err()
+        .expect("LocalDupesSource::open_read must refuse symlinks via O_NOFOLLOW");
+    assert_eq!(err.location, Some(link_loc));
 }
