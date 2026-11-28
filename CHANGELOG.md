@@ -2,6 +2,42 @@
 
 Each entry is a pre-release build for Windows. Downloads are on the GitHub releases page.
 
+## v0.9.4 — Button bar, built-in terminal, F3 hex editing, and floating Settings
+
+*2026-11-28*
+
+A major feature and polish release. Navo gains a customisable button bar with bundled icon packs, a built-in multi-tab ConPTY/PTY terminal drawer (opt-in under `[modules] terminal = true`), live streaming hex editing in F3 with non-elevated NTFS atomic replacement, clickable inline Settings editors with a floating Settings window option, and crisper rounded corners across panes and the terminal drawer.
+
+### Added
+
+- **Customisable button bar with bundled icon packs.** Toggle the toolbar from Settings → Window to pin Navo actions, user commands, external programs, separators, and drop-down menus with drag-and-drop onto file-taking buttons. Includes a live comment-preserving `buttonbar.toml` editor with 50-step undo, an uncapped virtual-scroll icon picker (`All`, `Lucide`, `Tabler`, `Phosphor`, `Brands` with optional brand colour, and `Downloaded`), a glyph/letter Maker tab, sanitised SVG/PNG import, and allowlisted optional icon pack downloads.
+- **Built-in terminal drawer (`Ctrl+\``).** Enable `[modules] terminal = true` to open a resizable bottom terminal drawer with multi-session tabs, a shell picker (`PowerShell`, `Windows PowerShell`, `Command Prompt`, `Git Bash`, WSL distros, and Unix shells), 120 Hz per-row cached rendering, trusted OSC 133 prompt integration, command exit bar with Restart/Close, and missing-shell fallback. When the module is off, `Ctrl+\`` offers a calm notice with quick Turn on and External terminal buttons.
+- **F3 streaming hex editing (`Ctrl+E`, `Ctrl+S`).** Switch the F3 hex viewer into edit mode to patch bytes in place with undo/redo, dirty byte highlighting, and file-stamp conflict checks. Saves stream patched chunks into a synced sibling file and replace the target atomically on NTFS even while open in the viewer, without requiring administrator privileges.
+- **Cross-OS external terminal auto-detection.** Setting External terminal to System default now automatically detects installed terminal emulators across Windows, macOS, and Linux instead of showing Windows-only options on non-Windows hosts.
+- **Floating Settings window foundation (`NAVO_SETTINGS_WINDOW=1`).** Settings can open in an owned floating window with its own title bar and live save, returning keyboard focus cleanly to the active pane on close.
+
+### Fixed
+
+- **Non-elevated Windows hex and draft saves (`os error 5`).** Desktop file saves now tolerate `ERROR_ACCESS_DENIED` on admin-only raw volume flush handles while keeping verbatim (`\\?\`) `FileRenameInfoEx` POSIX replacement, `MOVEFILE_WRITE_THROUGH` fallback, and target file/folder ACL checks.
+- **Built-in terminal PowerShell startup delay and shell capability probes.** Fixed an infinite recursion in the PowerShell `Function:prompt` wrapper that delayed the first prompt by 25–60 s and dropped the working path; Windows PowerShell prompts now appear in ~0.6 s with full path and OSC 133 markers. Added `DA1`, `DSR`, and `OSC 11` query replies (with Kitty keyboard mode disabled) so interactive shells such as `fish` prompt immediately, and latched multi-wake grid row damage before repaint.
+- **Settings `[Not set]` value boxes not opening by mouse.** Clicking any `[Not set]` value pill (External terminal command, Editor, Ignored names) now opens its inline editor directly.
+- **False "Navo closed unexpectedly" banner after clean close or upgrade.** Clean title-bar window closes and in-place upgrades now clear the running sentinel consistently before closing the window.
+- **Broken rounded corners on active pane cards and terminal drawer.** Opaque pane headers, inactive pane footers, terminal headers, exit bars, and running terminal grids now match the outer card radius instead of painting square corners over the active border.
+- **Icon picker memory retention and `All` list filtering.** Bounded the picker's GPU preview cache (released on close/hide), removed the 48-icon cap and "Keep typing" notice in `All`, and separated `Brands` into its own chip.
+
+### Under the hood
+
+None of these are wired to top-level UI flows yet.
+
+- **Find Results window & Classic Find backend.** Word, inverted (`not:on`), hex (`hex:`), explicit encoding decoders (`CP437`, `Windows-1252`, `UTF-16`, `UTF-8`), Office/ODF/EPUB zip-safe text extraction (`docs:on`), inline highlight spans, owned floating `FindHost`, 36 px tab strip, query token row, and `Ctrl+Shift+J` focus switching.
+- **F3 workbench & power foundations.** Read-only SQLite table source (`navo-structured`, not yet wired into the F3 UI opener), durable F3 editor drafts store (`data/drafts`, 32 MiB cap), and a staged duplicate finder engine (`size → xxhash → blake3`) with cloud-placeholder and symlink guards.
+- **Index service telemetry & memory.** Added `StatusV2` pipe framing with V1 fallback and streamed sparse folder counts on snapshot load.
+
+### Known issues
+
+- **Terminal shell picker shortcut on Windows.** `Ctrl+Shift+Space` may not open the shell picker in the live window; clicking the header chevron opens it reliably.
+- **SQLite files in F3.** Opening `.sqlite` files in F3 currently falls back to the read-only hex viewer until the SQLite table view is wired into the F3 UI.
+
 ## v0.9.3 — Follower heartbeat telemetry, AppContainer probes, and fuzzing gates
 
 *2026-11-26*
