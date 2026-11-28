@@ -51,6 +51,7 @@ pub fn render_exit_bar(
         .gap(t.spacing.sm)
         .px(t.spacing.md)
         .py(t.spacing.xs)
+        .rounded_b(t.radii.card)
         .bg(t.colors.background)
         .border_t_1()
         .border_color(t.colors.line)

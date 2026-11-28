@@ -1,7 +1,7 @@
 use gpui_kit::{BorderStyle, Styled};
 
 use super::super::card::dashed_outline;
-use super::super::{PaneMarks, marked_header, on_accent};
+use super::super::{PaneMarks, card_footer, card_header, marked_header, on_accent};
 use crate::tokens::{ColorTheme, Mode, Theme, ThemeLook, contrast_ratio};
 
 fn themes() -> impl Iterator<Item = Theme> {
@@ -67,5 +67,32 @@ fn the_target_outline_is_dashed_in_the_strong_border() {
         let mut outline = dashed_outline(&t);
         assert_eq!(outline.style().border_style, Some(BorderStyle::Dashed));
         assert_eq!(outline.style().border_color, Some(t.colors.faint));
+    }
+}
+
+#[test]
+fn card_header_rounds_top_corners_to_preserve_pane_card_ring() {
+    for t in themes() {
+        let mut header = card_header(&t);
+        let radii = &header.style().corner_radii;
+        let expected = Some(t.radii.card.into());
+        assert_eq!(radii.top_left, expected, "{:?} {:?}", t.color_theme, t.mode);
+        assert_eq!(
+            radii.top_right, expected,
+            "{:?} {:?}",
+            t.color_theme, t.mode
+        );
+        assert_eq!(radii.bottom_left, None);
+        assert_eq!(radii.bottom_right, None);
+
+        let mut inactive_footer = card_footer(&t, false);
+        let f_radii = &inactive_footer.style().corner_radii;
+        assert_eq!(f_radii.top_left, None);
+        assert_eq!(f_radii.top_right, None);
+        assert_eq!(f_radii.bottom_left, expected);
+        assert_eq!(f_radii.bottom_right, expected);
+
+        let mut active_footer = card_footer(&t, true);
+        assert_eq!(active_footer.style().background, None);
     }
 }

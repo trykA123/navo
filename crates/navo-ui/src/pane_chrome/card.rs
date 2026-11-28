@@ -131,6 +131,15 @@ pub fn card_header(t: &Theme) -> Div {
         .gap(t.spacing.sm)
         .h(px(HEADER_HEIGHT))
         .px(t.spacing.md)
+        .rounded_t(t.radii.card)
+}
+
+/// Builds the pane footer container, matching [`pane_card`] bottom corners when tinted.
+#[must_use]
+pub fn card_footer(t: &Theme, is_active: bool) -> Div {
+    div()
+        .flex_none()
+        .when(!is_active, |d| d.bg(t.colors.rail).rounded_b(t.radii.card))
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

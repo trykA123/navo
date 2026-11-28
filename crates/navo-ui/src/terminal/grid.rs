@@ -5,9 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::{
-    App, Bounds, ContentMask, Element, ElementId, Entity, GlobalElementId, InspectorElementId,
-    IntoElement, LayoutId, Pixels, Point, ShapedLine, SharedString, Style, TextAlign, Window, fill,
-    point, px, relative, size,
+    App, Bounds, ContentMask, Corners, Element, ElementId, Entity, GlobalElementId,
+    InspectorElementId, IntoElement, LayoutId, Pixels, Point, ShapedLine, SharedString, Style,
+    TextAlign, Window, fill, point, px, relative, size,
 };
 use navo_term::grid::{CursorShape, Snapshot};
 
@@ -50,6 +50,7 @@ pub struct GridStyle {
     pub cursor_shape: Option<CursorShape>,
     pub blink_enabled: bool,
     pub blink_elapsed: Duration,
+    pub bottom_radius: Pixels,
 }
 
 impl Default for GridStyle {
@@ -63,6 +64,7 @@ impl Default for GridStyle {
             cursor_shape: None,
             blink_enabled: true,
             blink_elapsed: Duration::ZERO,
+            bottom_radius: px(0.0),
         }
     }
 }
@@ -218,7 +220,17 @@ impl Element for TerminalGrid {
         window: &mut Window,
         cx: &mut App,
     ) {
-        window.paint_quad(fill(bounds, state.colors.background));
+        let bg = if self.style.bottom_radius > px(0.0) {
+            fill(bounds, state.colors.background).corner_radii(Corners {
+                top_left: px(0.0),
+                top_right: px(0.0),
+                bottom_right: self.style.bottom_radius,
+                bottom_left: self.style.bottom_radius,
+            })
+        } else {
+            fill(bounds, state.colors.background)
+        };
+        window.paint_quad(bg);
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             paint_blocks(&self.blocks, bounds, state, window);
             paint_backgrounds(&self.cache, state, window, cx);

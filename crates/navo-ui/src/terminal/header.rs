@@ -73,6 +73,7 @@ pub(crate) fn render_header(model: HeaderModel, actions: HeaderActions, cx: &App
         .test_support()
         .flex()
         .flex_none()
+        .rounded_t(t.radii.card)
         .bg(t.colors.background)
         .border_b_1()
         .border_color(t.colors.line);

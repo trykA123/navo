@@ -22,7 +22,7 @@ use crate::file_list::{
     Refresh, SwitchPane,
 };
 use crate::pane_chrome::{
-    PaneTabs, StateCard, pane_card, path_segments, state_card, target_outline,
+    PaneTabs, StateCard, card_footer, pane_card, path_segments, state_card, target_outline,
 };
 use crate::prelude::*;
 use crate::primitives::{Button, ButtonVariant, IconName, icon};
@@ -146,12 +146,7 @@ impl NavoWindow {
                 this.child(error_line(&t, pane, message))
             })
             .child(list)
-            .children((!footer.is_empty()).then(|| {
-                div()
-                    .flex_none()
-                    .when(!is_active, |d| d.bg(t.colors.rail))
-                    .child(footer)
-            }));
+            .children((!footer.is_empty()).then(|| card_footer(&t, is_active).child(footer)));
         pane_card(("pane", pane.get()), self.card_label(pane), is_active, cx)
             .relative()
             .child(body)

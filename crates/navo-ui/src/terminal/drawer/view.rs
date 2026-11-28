@@ -95,7 +95,9 @@ impl TerminalDrawer {
         match entry.entity.read(cx).state() {
             SessionState::MissingShell(info) => self.missing_shell_body(&info, cx),
             SessionState::Exited(code) => self.exited_body(entry, code, mono_font, cx),
-            SessionState::Running => self.grid_body(entry, mono_font, cx).into_any_element(),
+            SessionState::Running => self
+                .grid_body(entry, mono_font, tokens::current(cx).radii.card, cx)
+                .into_any_element(),
         }
     }
 
@@ -139,7 +141,7 @@ impl TerminalDrawer {
             .flex_1()
             .min_h_0()
             .w_full()
-            .child(self.grid_body(entry, mono_font, cx))
+            .child(self.grid_body(entry, mono_font, px(0.0), cx))
             .child(render_exit_bar(code, on_restart, on_close, cx))
             .into_any_element()
     }
@@ -148,10 +150,14 @@ impl TerminalDrawer {
         &self,
         entry: &SessionEntry,
         mono_font: SharedString,
+        bottom_radius: Pixels,
         cx: &mut Context<Self>,
     ) -> Div {
         let snapshot = entry.entity.read(cx).take_render_snapshot();
-        let style = GridStyle::default();
+        let style = GridStyle {
+            bottom_radius,
+            ..GridStyle::default()
+        };
         let measured = Rc::clone(&self.measured_dims);
         let weak = cx.weak_entity();
         let font_family = style.font_family.clone().unwrap_or(mono_font);
