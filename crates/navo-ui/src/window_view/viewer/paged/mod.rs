@@ -1,6 +1,7 @@
 mod body;
 mod cursor;
 mod draw;
+mod edit;
 mod find;
 mod follow;
 mod found;
@@ -20,10 +21,11 @@ mod syntax;
 mod view;
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use gpui_kit::{FocusHandle, Focusable, ScrollDelta, ScrollEvent, Task};
 use navo_core::paging::{LineIndex, MAX_ROW};
+use navo_fs::{HexPatchOverlay, PatchedByteSource};
 
 pub(super) use body::PagedBody;
 pub use lines::PagedKind;
@@ -36,6 +38,7 @@ use super::search::overview::Overview;
 use super::search::{Marking, source_changed};
 use crate::prelude::*;
 use crate::settings::{Field, Values};
+use edit::HexEditState;
 use find::{BarKind, FindState};
 use follow::Follower;
 use inspector::HexInspector;
@@ -60,6 +63,7 @@ pub struct PagedView {
     /// The hex cursor: the byte offset the inspector decodes.
     pub(super) cursor: u64,
     inspector: HexInspector,
+    hex_edit: HexEditState,
     moves: MoveQueue,
     shift: usize,
     focus: FocusHandle,
@@ -96,12 +100,18 @@ impl PagedView {
         cx: &mut Context<Self>,
     ) -> Self {
         let layout = paged.source.layout();
+        let base = paged.source;
+        let overlay = Arc::new(RwLock::new(HexPatchOverlay::new()));
+        let source: SharedSource = Arc::new(PatchedByteSource::with_overlay(
+            base.clone(),
+            overlay.clone(),
+        ));
         let mut view = Self {
             title: title.into(),
             summary: paged.summary.map(SharedString::from),
             problem: paged.problem.map(SharedString::from),
-            seen_len: paged.source.len(),
-            source: paged.source,
+            seen_len: source.len(),
+            source,
             marking: Marking::new(paged.reopen.clone()),
             line_numbers: true,
             reopen: paged.reopen,
@@ -110,6 +120,7 @@ impl PagedView {
             top: 0,
             cursor: 0,
             inspector: HexInspector::new(cx),
+            hex_edit: HexEditState::new(base, overlay, paged.stamp),
             moves: MoveQueue::default(),
             shift: 0,
             focus: cx.focus_handle(),
@@ -237,6 +248,10 @@ impl PagedView {
         if kind == PagedKind::Hex {
             self.cursor = self.top;
             self.stop_following();
+            self.ensure_hex_stamp(cx);
+        } else {
+            self.hex_edit.editing = false;
+            self.hex_edit.clear_nibble();
         }
         self.queue_move(Move::Realign, cx);
         self.start_index(cx);

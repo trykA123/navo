@@ -1,6 +1,7 @@
 use gpui_kit::Role;
 use gpui_kit::base::{ObservedElement, TestSupportExt};
-use gpui_kit::{Stateful, Window};
+use gpui_kit::{KeyDownEvent, Stateful, Window};
+use navo_l10n::tr;
 
 use super::PagedView;
 use super::find::{Bar, BarKind};
@@ -48,10 +49,11 @@ fn percent(done: u64, total: u64) -> u64 {
 }
 
 impl PagedView {
-    fn mode_label(&self) -> &'static str {
+    fn mode_label(&self) -> SharedString {
         match self.kind {
-            PagedKind::Hex => "Hex",
-            PagedKind::Text => "Text · read-only",
+            PagedKind::Hex if self.hex_edit.editing => tr("hex-edit-mode").into(),
+            PagedKind::Hex => "Hex".into(),
+            PagedKind::Text => "Text · read-only".into(),
         }
     }
 
@@ -70,6 +72,15 @@ impl PagedView {
             PagedKind::Hex => ("Ctrl+G", "Go to offset"),
             PagedKind::Text => ("Ctrl+G", "Go to line"),
         };
+        if self.is_hex_editing() {
+            return vec![
+                ("Ctrl+S", "Save"),
+                ("Ctrl+Z", "Undo"),
+                ("Ctrl+Y", "Redo"),
+                go_to,
+                ("Ctrl+I", "Inspector"),
+            ];
+        }
         let mut keys = vec![("Ctrl+F", "Find"), ("F3", "Next"), go_to];
         if self.kind == PagedKind::Hex {
             keys.extend(MARK_KEYS);
@@ -218,6 +229,9 @@ impl PagedView {
                     status(t, "paged-changed", "Changed on disk".into()).text_color(t.colors.warn),
                 )
             })
+            .when_some(self.hex_dirty_label(), |row, label| {
+                row.child(status(t, "hex-edit-dirty", label.into()).text_color(t.colors.warn))
+            })
             .children(self.follow_badge(t))
     }
 
@@ -302,7 +316,10 @@ impl Render for PagedView {
         let root = div()
             .id("paged")
             .key_context(PAGED_CONTEXT)
-            .track_focus(&self.focus);
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                view.hex_key_down(event, window, cx);
+            }));
         let root = Self::find_keys(Self::movement_keys(root, cx), cx);
         let root = Self::inspector_tab_keys(root, cx);
         Self::list_keys(root, cx)

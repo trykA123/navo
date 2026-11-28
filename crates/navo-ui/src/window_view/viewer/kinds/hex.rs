@@ -2,10 +2,15 @@ use super::{Load, Loaded, Slot, Sniff, ViewerKind};
 use crate::prelude::*;
 use crate::window_view::viewer::body::{Attach, ViewerBody};
 use crate::window_view::viewer::paged::PagedBody;
-use crate::window_view::viewer::{Paged, PagedKind};
+use crate::window_view::viewer::{HexFileStamp, Paged, PagedKind};
 
 const BINARY: u8 = 60;
 const TEXT: u8 = 10;
+
+struct HexLoaded {
+    paged: Paged,
+    stamp: Option<HexFileStamp>,
+}
 
 pub(super) struct Hex;
 
@@ -27,9 +32,9 @@ impl ViewerKind for Hex {
     }
 
     fn load(&self, load: Load<'_>) -> Result<Loaded, String> {
-        Ok(Box::new(
-            load.hooks.paged_with(load.location, load.encoding)?,
-        ))
+        let paged = load.hooks.paged_with(load.location, load.encoding)?;
+        let stamp = (load.hooks.hex_stamp)(load.location).ok().flatten();
+        Ok(Box::new(HexLoaded { paged, stamp }))
     }
 
     fn attach(
@@ -38,14 +43,14 @@ impl ViewerKind for Hex {
         _: &mut Window,
         cx: &mut App,
     ) -> Result<Box<dyn ViewerBody>, String> {
-        let paged = attach
+        let loaded = attach
             .loaded
-            .downcast::<Paged>()
+            .downcast::<HexLoaded>()
             .map_err(|_| "The hex view got data it cannot show.".to_owned())?;
-        Ok(Box::new(PagedBody::new(
+        Ok(Box::new(PagedBody::new_hex(
             attach.host,
-            *paged,
-            PagedKind::Hex,
+            loaded.paged,
+            loaded.stamp,
             cx,
         )))
     }

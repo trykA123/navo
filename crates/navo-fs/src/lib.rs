@@ -10,6 +10,7 @@ mod fake;
 pub mod find;
 pub mod git;
 pub mod hash;
+mod hex_patch;
 pub mod hostile_names;
 mod io_queue;
 mod job;
@@ -27,6 +28,10 @@ pub use code_page::{ansi_code_page, encoding_for_code_page};
 pub use durable_replace::native_replace_durable;
 pub(crate) use exists::{ALREADY_EXISTS_CODES, already_exists};
 pub use fake::{FakeFs, FakeOp, Fault};
+pub use hex_patch::{
+    HEX_SAVE_CHUNK, HexFileStamp, HexPatchOverlay, HexSaveError, MAX_HEX_UNDO, PatchedByteSource,
+    save_patched_file,
+};
 pub use io_queue::{
     Cancelled, Classifier, IoQueue, Job, JobId, JobKind, JobSlot, Limits, OwnerGuard, OwnerId,
     Pools, Priority, Scheduler, VolumeId, VolumeKind, volume_of,

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -7,6 +8,7 @@ use navo_core::marks::{Bookmarks, MarkSet, SearchHistory};
 use navo_core::paging::{ByteSource, LineIndex, Needle};
 use navo_core::{Location, ProviderPath};
 use navo_fs::archive::ArchiveListing;
+pub use navo_fs::{HexFileStamp, HexSaveError};
 
 use super::pdf::{OpenPdf, no_pdf};
 
@@ -93,9 +95,25 @@ pub struct Paged {
     pub stamp: Option<FileStamp>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct HexSave<'a> {
+    pub patches: &'a BTreeMap<u64, u8>,
+    pub expected: Option<&'a HexFileStamp>,
+    pub fallback_stamp: Option<FileStamp>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HexSaved {
+    pub stamp: Option<HexFileStamp>,
+    pub file_stamp: Option<FileStamp>,
+}
+
 type Read = Arc<dyn Fn(&Location) -> Result<FileText, String> + Send + Sync>;
 type ReadAs = Arc<dyn Fn(&Location, &'static Encoding) -> Result<FileText, String> + Send + Sync>;
 type Write = Arc<dyn Fn(&Location, &Save<'_>) -> Result<Saved, SaveError> + Send + Sync>;
+type ReadHexStamp = Arc<dyn Fn(&Location) -> Result<Option<HexFileStamp>, String> + Send + Sync>;
+type WriteHex =
+    Arc<dyn Fn(&Location, &HexSave<'_>) -> Result<HexSaved, HexSaveError> + Send + Sync>;
 type ReadHead = Arc<dyn Fn(&Location) -> Result<Head, String> + Send + Sync>;
 type OpenPaged = Arc<dyn Fn(&Location) -> Result<Paged, String> + Send + Sync>;
 type OpenPagedAs = Arc<dyn Fn(&Location, &'static Encoding) -> Result<Paged, String> + Send + Sync>;
@@ -118,6 +136,8 @@ pub struct FileHooks {
     pub read: Read,
     pub read_as: ReadAs,
     pub write: Write,
+    pub hex_stamp: ReadHexStamp,
+    pub write_hex: WriteHex,
     pub head: ReadHead,
     pub paged: OpenPaged,
     pub paged_as: OpenPagedAs,
@@ -163,6 +183,10 @@ impl FileHooks {
             read_as: Arc::new(|_, _| Err("Files cannot be opened here.".to_owned())),
             write: Arc::new(|_, _| {
                 Err(SaveError::Failed("Files cannot be saved here.".to_owned()))
+            }),
+            hex_stamp: Arc::new(|_| Ok(None)),
+            write_hex: Arc::new(|_, _| {
+                Err(HexSaveError::Failed(navo_l10n::tr("hex-edit-cannot-save")))
             }),
             head: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),
             paged: Arc::new(|_| Err("Files cannot be opened here.".to_owned())),

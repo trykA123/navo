@@ -193,7 +193,7 @@ impl PagedView {
             .filter(|_| screen.colours)
             .and_then(|_| cx.try_global::<KitTheme>())
             .map(|kit| Arc::clone(&kit.highlight_theme));
-        let cursor = self.hex_cursor(cx);
+        let cursor = self.hex_cursor(screen.end, cx);
         div()
             .id("paged-body")
             .test_support()

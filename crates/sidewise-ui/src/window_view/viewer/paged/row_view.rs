@@ -20,10 +20,12 @@ const CURSOR_UNDERLINE: f32 = 1.;
 /// What a click on a hex or ASCII byte does: it gets the byte's file offset.
 pub type PickByte = Rc<dyn Fn(u64, &mut Window, &mut App)>;
 
-/// The hex cursor a viewer row draws: the byte it sits on and what a click on a byte does.
+/// The hex cursor a viewer row draws: the byte it sits on, patched offsets on screen,
+/// and what a click on a byte does.
 #[doc(hidden)]
 pub struct HexCursor {
     pub at: Option<u64>,
+    pub patched: Vec<u64>,
     pub pick: Option<PickByte>,
 }
 
@@ -120,6 +122,15 @@ fn hex_ranges(slots: &[(usize, Paint)]) -> (Runs, Runs) {
         .unzip()
 }
 
+/// The look of a byte modified in the hex patch overlay before saving.
+fn patched_style(t: &Theme) -> HighlightStyle {
+    HighlightStyle {
+        background_color: Some(t.diff.change.fill),
+        color: Some(t.colors.warn),
+        ..HighlightStyle::default()
+    }
+}
+
 /// The cursor look: the selection fill with an accent underline, so it is not colour alone.
 fn cursor_style(t: &Theme) -> HighlightStyle {
     HighlightStyle {
@@ -134,8 +145,8 @@ fn cursor_style(t: &Theme) -> HighlightStyle {
     }
 }
 
-/// Puts the cursor style on `range`, replacing any paint it overlaps; keeps the runs sorted.
-fn with_cursor(mut styles: Styles, range: Range<usize>, style: HighlightStyle) -> Styles {
+/// Puts `style` on `range`, replacing any paint it overlaps; keeps the runs sorted.
+fn with_style(mut styles: Styles, range: Range<usize>, style: HighlightStyle) -> Styles {
     styles.retain(|(run, _)| run.end <= range.start || run.start >= range.end);
     let at = styles.partition_point(|(run, _)| run.start < range.start);
     styles.insert(at, (range, style));
@@ -153,14 +164,22 @@ pub fn hex_row(look: &RowLook<'_>, index: usize, line: &HexLine, cursor: &HexCur
     let (hex_paint, ascii_paint) = hex_ranges(&hex_slots(line.start, &look.painted));
     let is_bookmarked = look.is_bookmarked(line.start..line.start + HEX_WIDTH);
     let (mut hex, mut ascii) = (look.styled(hex_paint), look.styled(ascii_paint));
+    let row_end = line.start.saturating_add(line.row.ascii.len() as u64);
+    for &at in &cursor.patched {
+        if at >= line.start && at < row_end {
+            let slot = (at - line.start) as usize;
+            hex = with_style(hex, hex_range(slot), patched_style(look.t));
+            ascii = with_style(ascii, slot..slot + 1, patched_style(look.t));
+        }
+    }
     let slot = cursor
         .at
         .and_then(|at| at.checked_sub(line.start))
         .filter(|slot| *slot < HEX_WIDTH)
         .and_then(|slot| usize::try_from(slot).ok());
     if let Some(slot) = slot.filter(|slot| *slot < line.row.ascii.len()) {
-        hex = with_cursor(hex, hex_range(slot), cursor_style(look.t));
-        ascii = with_cursor(ascii, slot..slot + 1, cursor_style(look.t));
+        hex = with_style(hex, hex_range(slot), cursor_style(look.t));
+        ascii = with_style(ascii, slot..slot + 1, cursor_style(look.t));
     }
     hex_body(
         look,

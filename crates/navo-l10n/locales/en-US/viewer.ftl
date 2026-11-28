@@ -257,3 +257,15 @@ hex-inspector-strings-computing = Strings · computing…
 hex-inspector-strings-label = Strings
 hex-inspector-tab = Hashes and strings
 hex-inspector-enter = Copy or go to
+hex-edit-mode = Hex · edit
+hex-edit-modified = { $count ->
+    [one] 1 byte modified
+   *[other] { $count } bytes modified
+}
+hex-edit-saving = Saving…
+hex-edit-saved = Saved.
+hex-edit-conflict = Changed on disk since it was opened. Save refused.
+hex-edit-stamp-error = Cannot inspect file stamp: { $error }
+hex-edit-stamp-missing = Cannot verify file stamp before saving.
+hex-edit-cannot-save = Files cannot be saved here.
+hex-edit-save-failed = Could not save.

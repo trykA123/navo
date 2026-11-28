@@ -10,8 +10,8 @@ use crate::prelude::*;
 use crate::primitives::AppHeld;
 use crate::window_view::NavoWindow;
 use crate::window_view::viewer::{
-    Attach, FileHooks, Host, Kind, Kinds, Opened, PREVIEW_BODY, Picked, Request, SaveError, Sniff,
-    Turn, ViewerBody, hold_memory, sniff_and_load,
+    Attach, FileHooks, HexSaveError, Host, Kind, Kinds, Opened, PREVIEW_BODY, Picked, Request,
+    SaveError, Sniff, Turn, ViewerBody, hold_memory, sniff_and_load,
 };
 
 const READ_ONLY: &str = "The preview is read-only.";
@@ -44,6 +44,7 @@ impl FilePreview {
 pub(super) fn read_only(hooks: &FileHooks) -> FileHooks {
     FileHooks {
         write: Arc::new(|_, _| Err(SaveError::Failed(READ_ONLY.to_owned()))),
+        write_hex: Arc::new(|_, _| Err(HexSaveError::Failed(READ_ONLY.to_owned()))),
         save_memory: Arc::new(|_, _, _, _| {}),
         remember: Arc::new(|_| {}),
         ..hooks.clone()

@@ -52,8 +52,8 @@ pub use archive::{ArchiveSource, ArchiveView};
 pub use body::{Attach, BodyAct, BodyKeys, Carried, Host, Key, MenuEntry, ViewerBody};
 pub use encoding::encoding_picker;
 pub use files::{
-    FileHooks, FileStamp, FileText, Head, IndexRun, Paged, ReadBytes, Reopen, Save, SaveError,
-    Saved, SharedSource,
+    FileHooks, FileStamp, FileText, Head, HexFileStamp, HexSave, HexSaveError, HexSaved, IndexRun,
+    Paged, ReadBytes, Reopen, Save, SaveError, Saved, SharedSource,
 };
 pub use font::{FontFace, FontView};
 pub(in crate::window_view) use footprint::{PREVIEW_BODY, VIEWER_DOCUMENTS, hold as hold_memory};

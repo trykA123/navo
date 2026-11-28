@@ -8,7 +8,10 @@ use navo_core::Location;
 use navo_core::encoding::{Encoding, decode, decode_as, encode, looks_binary};
 use navo_core::line_ends::{DIFF_BUDGET, LineEnds};
 use navo_store::{replace_atomic, replace_entry_atomic};
-use navo_ui::window_view::{FileHooks, FileStamp, FileText, Save, SaveError, Saved};
+use navo_ui::window_view::{
+    FileHooks, FileStamp, FileText, HexFileStamp, HexSave, HexSaveError, HexSaved, Save, SaveError,
+    Saved,
+};
 
 mod archive;
 mod code_page;
@@ -37,6 +40,8 @@ pub fn hooks(db: Option<SharedDb>) -> FileHooks {
         read: Arc::new(read),
         read_as: Arc::new(read_as),
         write: Arc::new(write),
+        hex_stamp: Arc::new(hex_stamp),
+        write_hex: Arc::new(write_hex),
         head: Arc::new(paged::head),
         paged: Arc::new(paged::paged),
         paged_as: Arc::new(paged::paged_as),
@@ -61,6 +66,7 @@ pub fn profile_hooks(
     let mut result = hooks(db);
     if !experimental {
         if let Some(dirs) = dirs.cloned() {
+            let hex_dirs = dirs.clone();
             result.write = Arc::new(move |location, save| {
                 let target = navo_fs::save_location(location)
                     .map_err(|error| SaveError::Failed(error.message()))?;
@@ -68,10 +74,18 @@ pub fn profile_hooks(
                     crate::jobs::claim_write(&dirs, &target, false).map_err(SaveError::Failed)?;
                 write(location, save)
             });
+            result.write_hex = Arc::new(move |location, save| {
+                let target = navo_fs::save_location(location)
+                    .map_err(|error| HexSaveError::Failed(error.message()))?;
+                let _hold = crate::jobs::claim_write(&hex_dirs, &target, false)
+                    .map_err(HexSaveError::Failed)?;
+                write_hex(location, save)
+            });
         }
         return result;
     }
     if let Some(dirs) = dirs.cloned() {
+        let hex_dirs = dirs.clone();
         result.write = Arc::new(move |location, save| {
             let target = navo_fs::save_location(location)
                 .map_err(|error| SaveError::Failed(error.message()))?;
@@ -79,9 +93,21 @@ pub fn profile_hooks(
                 .map_err(SaveError::Failed)?;
             write_using(&target, save, (DIFF_BUDGET, replace_entry_atomic))
         });
+        result.write_hex = Arc::new(move |location, save| {
+            let target = navo_fs::save_location(location)
+                .map_err(|error| HexSaveError::Failed(error.message()))?;
+            let _lease = crate::jobs::claim_write(&hex_dirs, &target, experimental)
+                .map_err(HexSaveError::Failed)?;
+            write_hex(&target, save)
+        });
     } else {
         result.write =
             Arc::new(|_, _| Err(SaveError::Failed(navo_l10n::tr("job-profile-unavailable"))));
+        result.write_hex = Arc::new(|_, _| {
+            Err(HexSaveError::Failed(navo_l10n::tr(
+                "job-profile-unavailable",
+            )))
+        });
     }
     result
 }
@@ -204,6 +230,35 @@ pub fn line_endings(text: &str, crlf: bool) -> String {
 
 pub fn write(location: &Location, save: &Save<'_>) -> Result<Saved, SaveError> {
     write_within(location, save, DIFF_BUDGET)
+}
+
+pub fn hex_stamp(location: &Location) -> Result<Option<HexFileStamp>, String> {
+    let path = path_of(location)?;
+    HexFileStamp::from_path(&path).map(Some).map_err(|error| {
+        let error = error.to_string();
+        navo_l10n::t!("hex-edit-stamp-error", error = error)
+    })
+}
+
+pub fn write_hex(location: &Location, save: &HexSave<'_>) -> Result<HexSaved, HexSaveError> {
+    let path = path_of(location).map_err(HexSaveError::Failed)?;
+    let expected = match save.expected {
+        Some(stamp) => stamp.clone(),
+        None => {
+            let fallback = save
+                .fallback_stamp
+                .ok_or_else(|| HexSaveError::Failed(navo_l10n::tr("hex-edit-stamp-missing")))?;
+            if stamp_of(&path) != Some(fallback) {
+                return Err(HexSaveError::FileChangedOnDisk);
+            }
+            HexFileStamp::from_path(&path)?
+        }
+    };
+    let stamp = navo_fs::save_patched_file(&path, &expected, save.patches)?;
+    Ok(HexSaved {
+        stamp: Some(stamp),
+        file_stamp: stamp_of(&path),
+    })
 }
 
 fn write_within(

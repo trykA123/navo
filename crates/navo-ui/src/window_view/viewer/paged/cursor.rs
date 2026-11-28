@@ -24,6 +24,7 @@ impl PagedView {
 
     /// Moves the cursor by `delta` bytes, clamped to the file, and scrolls it into view.
     fn move_cursor(&mut self, delta: i64, cx: &mut Context<Self>) {
+        self.hex_edit.clear_nibble();
         let moved = i128::from(self.cursor) + i128::from(delta);
         let clamped = moved.clamp(0, i128::from(self.last_byte()));
         self.cursor = u64::try_from(clamped).unwrap_or_default();
@@ -64,6 +65,7 @@ impl PagedView {
     pub(super) fn page_key(&mut self, down: bool, cx: &mut Context<Self>) {
         let page = if down { self.page() } else { -self.page() };
         if self.kind == PagedKind::Hex {
+            self.hex_edit.clear_nibble();
             let moved = i128::from(self.cursor) + i128::from(page) * i128::from(HEX_WIDTH);
             let clamped = moved.clamp(0, i128::from(self.last_byte()));
             self.cursor = u64::try_from(clamped).unwrap_or_default();
@@ -74,6 +76,7 @@ impl PagedView {
     /// Ctrl+Home and Ctrl+End go to the file's ends; the hex cursor goes to its first or last byte.
     pub(super) fn ends_key(&mut self, end: bool, cx: &mut Context<Self>) {
         if self.kind == PagedKind::Hex {
+            self.hex_edit.clear_nibble();
             self.cursor = if end { self.last_byte() } else { 0 };
         }
         self.user_move(if end { Move::End } else { Move::Offset(0) }, cx);
@@ -81,6 +84,7 @@ impl PagedView {
 
     /// Moves the cursor to byte `at` (clamped to the file) and scrolls it into view.
     pub(super) fn go_to_byte(&mut self, at: u64, cx: &mut Context<Self>) {
+        self.hex_edit.clear_nibble();
         self.cursor = at.min(self.last_byte());
         self.reveal_cursor(cx);
         cx.notify();
@@ -88,16 +92,23 @@ impl PagedView {
 
     /// Puts the cursor on the clicked byte and gives the view the keyboard focus.
     fn pick_byte(&mut self, at: u64, window: &mut Window, cx: &mut Context<Self>) {
+        self.hex_edit.clear_nibble();
         window.focus(&self.focus, cx);
         self.cursor = at.min(self.last_byte());
         cx.notify();
     }
 
-    /// The cursor the hex rows draw, and the click that moves it.
-    pub(super) fn hex_cursor(&self, cx: &mut Context<Self>) -> HexCursor {
+    /// The cursor the hex rows draw, the patched offsets on screen, and the click that moves it.
+    pub(super) fn hex_cursor(&self, end: u64, cx: &mut Context<Self>) -> HexCursor {
         let view = cx.weak_entity();
+        let patched = if self.kind == PagedKind::Hex {
+            self.hex_edit.patched_in_range(self.top..end.max(self.top))
+        } else {
+            Vec::new()
+        };
         HexCursor {
             at: Some(self.cursor),
+            patched,
             pick: Some(Rc::new(move |at, window, cx| {
                 let _ = view.update(cx, |view, cx| view.pick_byte(at, window, cx));
             })),
