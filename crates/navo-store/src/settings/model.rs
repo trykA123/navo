@@ -31,6 +31,7 @@ pub struct Settings {
     pub updates: Updates,
     pub compare: super::Compare,
     pub git: super::git::GitSettings,
+    pub modules: super::modules::Modules,
     pub experimental: BTreeMap<String, bool>,
 }
 

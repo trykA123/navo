@@ -155,4 +155,6 @@ fetch = false
 fetch-minutes = 15
 network = false
 
+[modules]
+
 [experimental]

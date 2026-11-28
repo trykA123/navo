@@ -14,6 +14,7 @@ mod git;
 mod layout;
 mod ledger;
 mod model;
+mod modules;
 mod parse;
 mod pending;
 mod retention;
@@ -38,6 +39,7 @@ pub use model::{
     ModifierHints, PopUpPosition, RightButton, Search, SearchIndex, SelectionSettings, Settings,
     SizeMode, SortKey, ThemeMode, Updates,
 };
+pub use modules::Modules;
 pub use parse::{parse, parse_retention, to_toml};
 pub use retention::RetentionSettings;
 pub use terminal::{

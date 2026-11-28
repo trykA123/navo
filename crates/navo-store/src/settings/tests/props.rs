@@ -218,6 +218,13 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
         command,
         ..Terminal::default()
     });
+    let modules = btree_map(TEXT, any::<bool>(), 0..4).prop_map(|entries| {
+        let mut modules = Modules::default();
+        for (id, enabled) in entries {
+            modules.set(id, enabled);
+        }
+        modules
+    });
     let experimental = btree_map(TEXT, any::<bool>(), 0..4);
     let editor = option::of(TEXT).prop_map(|path| Editor { path });
     (
@@ -231,7 +238,7 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
             viewers(),
             markdown_and_preview(),
         ),
-        experimental,
+        (modules, experimental),
     )
         .prop_map(
             |(
@@ -239,7 +246,7 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
                 files,
                 selection,
                 (terminal, editor, window, (text, image, automotive, copy), (markdown, preview)),
-                experimental,
+                (modules, experimental),
             )| Settings {
                 appearance,
                 files,
@@ -253,6 +260,7 @@ pub(super) fn settings() -> impl Strategy<Value = Settings> {
                 preview,
                 copy,
                 automotive,
+                modules,
                 experimental,
                 ..Settings::default()
             },

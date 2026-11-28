@@ -16,6 +16,7 @@ mod complete_store;
 mod following;
 mod layout;
 mod model;
+mod modules;
 mod parse;
 mod props;
 mod review;
