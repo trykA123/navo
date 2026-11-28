@@ -3,6 +3,7 @@
 mod chip;
 pub(crate) mod keys;
 mod open;
+mod query_row;
 mod title;
 mod view;
 

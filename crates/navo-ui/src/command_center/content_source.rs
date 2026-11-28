@@ -66,7 +66,7 @@ impl ContentQuery {
 }
 
 /// Resolves a rejected token's error through its Fluent message.
-fn token_message(error: &TokenError) -> SharedString {
+pub(crate) fn token_message(error: &TokenError) -> SharedString {
     match error {
         TokenError::UnclosedQuote => navo_l10n::t!("find-token-error-unclosed-quote"),
         TokenError::Size => navo_l10n::t!("find-token-error-size"),
@@ -109,6 +109,11 @@ impl Default for ContentSource {
 impl ContentSource {
     pub(crate) fn start(&self, base: Location, query: FindQuery, cancel: CancelToken) -> Preview {
         Preview::start(self.walk.clone(), base, query, cancel)
+    }
+
+    /// Returns a cloned handle to the underlying content-walk function.
+    pub(crate) fn walk(&self) -> ContentWalk {
+        self.walk.clone()
     }
 
     #[cfg(test)]

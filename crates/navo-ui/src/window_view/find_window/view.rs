@@ -6,6 +6,7 @@ use navo_l10n::t;
 
 use super::super::NavoWindow;
 use super::keys;
+use super::query_row::QueryEdit;
 use crate::find_results::book::FindBook;
 use crate::prelude::*;
 use crate::tokens;
@@ -23,6 +24,7 @@ pub(in crate::window_view) struct FindWindow {
     book: Entity<FindBook>,
     focus: FocusHandle,
     pinned: bool,
+    pub(super) edit: Option<QueryEdit>,
     _book_watch: Subscription,
 }
 
@@ -35,13 +37,24 @@ impl FindWindow {
         pinned: bool,
         cx: &mut Context<Self>,
     ) -> Self {
-        let _book_watch = cx.observe(&book, |_, _, cx| cx.notify());
+        let _book_watch = cx.observe(&book, |view, book, cx| {
+            let active_id = book.read(cx).active().map(|tab| tab.id);
+            if view
+                .edit
+                .as_ref()
+                .is_some_and(|edit| Some(edit.tab_id()) != active_id)
+            {
+                view.edit = None;
+            }
+            cx.notify();
+        });
         Self {
             navo,
             navo_window,
             book,
             focus: cx.focus_handle(),
             pinned,
+            edit: None,
             _book_watch,
         }
     }
@@ -90,33 +103,47 @@ impl FindWindow {
         self.return_to_navo(cx);
     }
 
-    fn stop(&mut self, _: &keys::Stop, _: &mut Window, cx: &mut Context<Self>) {
-        let stopped = self.book.update(cx, |book, cx| {
-            let Some(tab) = book.active_mut() else {
-                return false;
-            };
-            if !tab.is_running() {
-                return false;
-            }
-            tab.stop();
-            cx.notify();
-            true
-        });
-        if !stopped {
+    fn edit_query(&mut self, _: &keys::EditQuery, window: &mut Window, cx: &mut Context<Self>) {
+        self.start_edit(window, cx);
+    }
+
+    fn run_again(&mut self, _: &keys::RunAgain, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.commit_edit(window, cx) {
+            self.run_active(cx);
+        }
+    }
+
+    fn on_toggle_case(&mut self, _: &keys::ToggleCase, _: &mut Window, cx: &mut Context<Self>) {
+        self.toggle_case(cx);
+    }
+
+    fn on_toggle_regex(&mut self, _: &keys::ToggleRegex, _: &mut Window, cx: &mut Context<Self>) {
+        self.toggle_regex(cx);
+    }
+
+    fn stop(&mut self, _: &keys::Stop, window: &mut Window, cx: &mut Context<Self>) {
+        if self.cancel_edit(window, cx) {
+            return;
+        }
+        if !self.stop_active(cx) {
             self.return_to_navo(cx);
         }
     }
 }
 
 impl Render for FindWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = tokens::current(cx);
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = tokens::current(cx).clone();
         let tabs = self.book.read(cx).len();
         div()
             .id("find-window")
             .key_context(FIND_RESULTS_CONTEXT)
             .track_focus(&self.focus)
             .on_action(cx.listener(Self::back_to_navo))
+            .on_action(cx.listener(Self::edit_query))
+            .on_action(cx.listener(Self::run_again))
+            .on_action(cx.listener(Self::on_toggle_case))
+            .on_action(cx.listener(Self::on_toggle_regex))
             .on_action(cx.listener(Self::stop))
             .test_support()
             .size_full()
@@ -127,6 +154,7 @@ impl Render for FindWindow {
             .font_family(theme.typography.ui_font.clone())
             .text_size(theme.typography.body)
             .child(self.title_bar(cx))
+            .child(self.query_row(window, cx))
             .child(
                 div()
                     .flex_1()

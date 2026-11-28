@@ -5,6 +5,14 @@ find-window-unpin = Stop keeping above other windows
 find-window-minimize = Minimise
 find-status-chip = Find results
 find-status-chip-count = Find results ({ $count })
+find-query-placeholder = Search text or filters…
+find-query-strip-label = Search query
+find-query-case = Aa
+find-query-regex = .*
+find-query-stop = Stop
+find-query-run-again = Run again
+find-query-remove-token = Remove { $token }
+find-query-more-tokens = +{ $count }
 
 cmd-find-results-focus = Go to find results
 cmd-find-results-up = Up

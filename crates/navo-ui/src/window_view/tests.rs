@@ -66,6 +66,7 @@ mod empty_folder;
 mod find;
 mod find_window;
 mod find_window_focus;
+mod find_window_query;
 mod find_window_tabs;
 mod first_key;
 mod fkeys;
