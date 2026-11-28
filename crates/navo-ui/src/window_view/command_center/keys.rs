@@ -94,7 +94,11 @@ impl NavoWindow {
             }))
     }
 
-    pub(super) fn open_content(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(in crate::window_view) fn open_content(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.command_center.open.is_none() {
             self.toggle_command_center(window, cx);
         }

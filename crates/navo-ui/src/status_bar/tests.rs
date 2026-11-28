@@ -1,10 +1,13 @@
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gpui_kit::AppContext as _;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{Context, IntoElement, Render, Role, TestAppContext, Window};
 
 use super::chips::marked_part;
 use super::{
-    FooterParts, ListingMark, StatusBar, StatusBarProps, StatusNotice, WorkspaceButton,
+    FindChip, FooterParts, ListingMark, StatusBar, StatusBarProps, StatusNotice, WorkspaceButton,
     WorkspaceSummary,
 };
 use crate::format;
@@ -305,4 +308,71 @@ fn the_workspace_button_alone_does_not_keep_a_hidden_footer() {
         .parts(none())
         .workspace(Some(WorkspaceButton::new(summary())));
     assert!(bar.is_empty());
+}
+
+struct WithFindChip {
+    chip: Option<(String, bool)>,
+    clicks: Rc<Cell<usize>>,
+}
+
+impl Render for WithFindChip {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let clicks = self.clicks.clone();
+        let chip = self.chip.as_ref().map(|(label, running)| FindChip {
+            label: label.clone().into(),
+            running: *running,
+            on_click: Rc::new(move |_, _, _| clicks.set(clicks.get() + 1)),
+        });
+        StatusBar::new("status", busy_props(ListingMark::Fresh)).find_chip(chip)
+    }
+}
+
+#[gpui_kit::test]
+fn find_chip_renders_when_some_and_omits_when_none(cx: &mut TestAppContext) {
+    let clicks = Rc::new(Cell::new(0));
+    let (none_win, _) = open(cx, {
+        let clicks = clicks.clone();
+        move |_, _| WithFindChip { chip: None, clicks }
+    });
+    cx.update_window(none_win, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("status-find-chip").is_none());
+    })
+    .expect("window");
+
+    let (idle_win, _) = open(cx, {
+        let clicks = clicks.clone();
+        move |_, _| WithFindChip {
+            chip: Some(("Find results".to_owned(), false)),
+            clicks,
+        }
+    });
+    cx.update_window(idle_win, |_, window, cx| {
+        window.render_frame(cx);
+        let chip = window.find("status-find-chip");
+        assert_eq!(chip.role(), Some(Role::Button));
+        assert_eq!(chip.label(), Some("Find results"));
+        assert!(window.try_find("status-find-chip-icon").is_some());
+        assert!(window.try_find("status-find-chip-running").is_none());
+        window.click("status-find-chip", cx);
+    })
+    .expect("window");
+    assert_eq!(clicks.get(), 1);
+
+    let (running_win, _) = open(cx, {
+        let clicks = clicks.clone();
+        move |_, _| WithFindChip {
+            chip: Some(("Find results (2)".to_owned(), true)),
+            clicks,
+        }
+    });
+    cx.update_window(running_win, |_, window, cx| {
+        window.render_frame(cx);
+        let chip = window.find("status-find-chip");
+        assert_eq!(chip.role(), Some(Role::Button));
+        assert_eq!(chip.label(), Some("Find results (2)"));
+        assert!(window.try_find("status-find-chip-running").is_some());
+        assert!(window.try_find("status-find-chip-icon").is_none());
+    })
+    .expect("window");
 }

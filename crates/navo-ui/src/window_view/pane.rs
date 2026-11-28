@@ -243,6 +243,7 @@ impl NavoWindow {
             .notice_action(action)
             .note(self.slow_drive_note(pane))
             .workspace(is_active.then(|| self.workspace_button(cx)).flatten())
+            .find_chip(self.find_chip_for(pane, cx))
             .summary(self.find_status(pane))
     }
 

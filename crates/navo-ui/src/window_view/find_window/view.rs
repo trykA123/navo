@@ -1,13 +1,17 @@
 //! Placeholder view for the floating find-results window.
 
 use gpui_kit::base::TestSupportExt;
-use gpui_kit::{Subscription, WeakEntity};
+use gpui_kit::{FocusHandle, Subscription, WeakEntity};
 use navo_l10n::t;
 
 use super::super::NavoWindow;
+use super::keys;
 use crate::find_results::book::FindBook;
 use crate::prelude::*;
 use crate::tokens;
+
+/// Key context for the floating find-results window.
+const FIND_RESULTS_CONTEXT: &str = "FindResults";
 
 /// Root content view for the floating find-results window.
 ///
@@ -17,6 +21,7 @@ pub(in crate::window_view) struct FindWindow {
     navo: WeakEntity<NavoWindow>,
     navo_window: AnyWindowHandle,
     book: Entity<FindBook>,
+    focus: FocusHandle,
     pinned: bool,
     _book_watch: Subscription,
 }
@@ -35,9 +40,15 @@ impl FindWindow {
             navo,
             navo_window,
             book,
+            focus: cx.focus_handle(),
             pinned,
             _book_watch,
         }
+    }
+
+    /// Moves keyboard focus inside the results window to its main focus handle.
+    pub(super) fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.focus, cx);
     }
 
     /// Returns the weak handle to the owning `NavoWindow`.
@@ -65,6 +76,36 @@ impl FindWindow {
         self.pinned = pinned;
         cx.notify();
     }
+
+    /// Activates the owning Navo window and focuses its active pane, ignoring a gone owner.
+    fn return_to_navo(&self, cx: &mut Context<Self>) {
+        let navo = self.navo.clone();
+        let _ = cx.update_window(self.navo_window, |_, window, cx| {
+            window.activate_window();
+            let _ = navo.update(cx, |navo, cx| navo.focus_core_pane(window, cx));
+        });
+    }
+
+    fn back_to_navo(&mut self, _: &keys::BackToNavo, _: &mut Window, cx: &mut Context<Self>) {
+        self.return_to_navo(cx);
+    }
+
+    fn stop(&mut self, _: &keys::Stop, _: &mut Window, cx: &mut Context<Self>) {
+        let stopped = self.book.update(cx, |book, cx| {
+            let Some(tab) = book.active_mut() else {
+                return false;
+            };
+            if !tab.is_running() {
+                return false;
+            }
+            tab.stop();
+            cx.notify();
+            true
+        });
+        if !stopped {
+            self.return_to_navo(cx);
+        }
+    }
 }
 
 impl Render for FindWindow {
@@ -73,6 +114,10 @@ impl Render for FindWindow {
         let tabs = self.book.read(cx).len();
         div()
             .id("find-window")
+            .key_context(FIND_RESULTS_CONTEXT)
+            .track_focus(&self.focus)
+            .on_action(cx.listener(Self::back_to_navo))
+            .on_action(cx.listener(Self::stop))
             .test_support()
             .size_full()
             .flex()

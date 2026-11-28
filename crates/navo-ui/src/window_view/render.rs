@@ -42,6 +42,9 @@ impl Render for NavoWindow {
             .on_action(cx.listener(|view, _: &keys::ToggleTerminal, window, cx| {
                 view.toggle_terminal(window, cx);
             }))
+            .on_action(cx.listener(|view, _: &keys::FocusFindResults, window, cx| {
+                view.focus_find_results(window, cx);
+            }))
             .children(Self::noted_modal(self.modal_view(window, cx)))
             .children(self.app_menu_view(cx))
             .children(self.shell_menu_view())

@@ -3,6 +3,8 @@ find-window-add-tab = New search tab
 find-window-pin = Keep above other windows
 find-window-unpin = Stop keeping above other windows
 find-window-minimize = Minimise
+find-status-chip = Find results
+find-status-chip-count = Find results ({ $count })
 
 cmd-find-results-focus = Go to find results
 cmd-find-results-up = Up

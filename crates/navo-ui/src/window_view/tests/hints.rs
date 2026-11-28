@@ -98,7 +98,7 @@ fn the_header_counts_the_keys_and_the_layers_one_modifier_away(cx: &mut TestAppC
         })
         .expect("window")
     };
-    assert_eq!(label(cx, "modifier-hints-more-Shift"), "10 more with Shift");
+    assert_eq!(label(cx, "modifier-hints-more-Shift"), "11 more with Shift");
     assert_eq!(label(cx, "modifier-hints-more-Alt"), "4 more with Alt");
     assert_eq!(
         label(cx, "modifier-hints-count"),

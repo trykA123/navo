@@ -13,7 +13,8 @@ use crate::tokens;
 mod chips;
 mod workspace;
 
-use chips::{marked_chip, marked_part, notice_text, quiet_note};
+pub(crate) use chips::FindChip;
+use chips::{find_chip, marked_chip, marked_part, notice_text, quiet_note};
 pub use workspace::{WorkspaceButton, WorkspaceSummary};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -137,6 +138,7 @@ pub struct StatusBar {
     note: Option<SharedString>,
     parts: FooterParts,
     workspace: Option<WorkspaceButton>,
+    find_chip: Option<FindChip>,
     summary: Option<SharedString>,
 }
 
@@ -150,6 +152,7 @@ impl StatusBar {
             note: None,
             parts: FooterParts::default(),
             workspace: None,
+            find_chip: None,
             summary: None,
         }
     }
@@ -204,6 +207,12 @@ impl StatusBar {
     #[must_use]
     pub fn workspace(mut self, workspace: Option<WorkspaceButton>) -> Self {
         self.workspace = workspace;
+        self
+    }
+
+    #[must_use]
+    pub(crate) fn find_chip(mut self, chip: Option<FindChip>) -> Self {
+        self.find_chip = chip;
         self
     }
 
@@ -278,6 +287,7 @@ impl RenderOnce for StatusBar {
             .when(parts.free_space, |d| {
                 d.child(div().flex_none().child(props.free_text()))
             })
+            .when_some(self.find_chip, |d, chip| d.child(find_chip(t, chip)))
             .children(self.workspace)
     }
 }

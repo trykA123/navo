@@ -22,6 +22,19 @@ pub(in crate::window_view) fn test_raw_handle(handle: AnyWindowHandle) -> RawWin
 }
 
 impl NavoWindow {
+    /// Focuses or opens the results window when tabs exist; otherwise opens Ctrl+K Content mode.
+    pub(in crate::window_view) fn focus_find_results(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.find.book().read(cx).is_empty() {
+            self.open_content(window, cx);
+            return;
+        }
+        self.open_find(window, cx);
+    }
+
     /// Opens the floating find-results window, or activates the existing one if already open.
     pub(in crate::window_view) fn open_find(
         &mut self,
@@ -52,7 +65,10 @@ impl NavoWindow {
         let opened = crate::open_window(options, cx, |find_window, cx| {
             find_raw = native_raw(find_window);
             wire_find_close(find_window, navo.clone(), navo_handle, cx);
-            cx.new(|cx| FindWindow::new(navo, navo_handle, book, pinned, cx))
+            let view = cx.new(|cx| FindWindow::new(navo, navo_handle, book, pinned, cx));
+            find_window.activate_window();
+            view.update(cx, |view, cx| view.focus(find_window, cx));
+            view
         });
         let (handle, view) = match opened {
             Ok(opened) => opened,
@@ -145,13 +161,19 @@ impl NavoWindow {
         let Some(handle) = self.find.window_handle() else {
             return false;
         };
+        let view = self.find.view().cloned();
         if self.find.is_hidden()
             && let Some(hook) = &self.window_shown
         {
             hook(self.find.raw(), true);
         }
         let active = cx
-            .update_window(handle, |_, window, _| window.activate_window())
+            .update_window(handle, |_, window, cx| {
+                window.activate_window();
+                if let Some(view) = &view {
+                    view.update(cx, |view, cx| view.focus(window, cx));
+                }
+            })
             .is_ok();
         if active {
             self.find.set_hidden(false);

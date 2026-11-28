@@ -1,10 +1,12 @@
 //! Owned floating find-results window host: lifecycle, placement and book ownership.
 
+mod chip;
 pub(crate) mod keys;
 mod open;
 mod title;
 mod view;
 
+use gpui_kit::Subscription;
 use navo_core::FindMemory;
 
 use crate::find_results::book::FindBook;
@@ -24,16 +26,22 @@ pub(super) struct FindHost {
     hidden: bool,
     op: Option<u64>,
     hooks: FindHooks,
+    _book_watch: Subscription,
 }
 
 impl FindHost {
     /// Creates a new find host, restoring saved queries as idle tabs.
-    pub(super) fn new(hooks: &FindHooks, memory: &FindMemory, cx: &mut App) -> Self {
+    pub(super) fn new(
+        hooks: &FindHooks,
+        memory: &FindMemory,
+        cx: &mut Context<super::NavoWindow>,
+    ) -> Self {
         let book = cx.new(|_| {
             let mut book = FindBook::new();
             book.restore(memory.queries().to_vec());
             book
         });
+        let _book_watch = cx.observe(&book, |_, _, cx| cx.notify());
         Self {
             book,
             window: None,
@@ -41,6 +49,7 @@ impl FindHost {
             hidden: false,
             op: None,
             hooks: hooks.clone(),
+            _book_watch,
         }
     }
 
