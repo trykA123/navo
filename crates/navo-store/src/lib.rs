@@ -4,6 +4,7 @@ mod atomic_write;
 mod cache_db;
 mod db;
 mod dirs;
+mod drafts;
 mod journal;
 mod keymap_file;
 mod recovery;
@@ -26,6 +27,10 @@ pub use db::{
     check_downgrade_current,
 };
 pub use dirs::StoreDirs;
+pub use drafts::{
+    DRAFT_DEBOUNCE_DELAY, DRAFT_MAGIC, DRAFT_VERSION, DraftDebounce, DraftError, DraftFileStamp,
+    DraftRecord, DraftSaveOutcome, DraftStore, DraftSummary, MAX_DRAFT_BYTES,
+};
 pub use journal::{
     FinishedJob, JobId, JobJournal, JobState, JournalError, JournalStep, PruneLimits, StepEvidence,
     StepState, UndoKinds, Undoable, UnfinishedJob, VacuumOnce,

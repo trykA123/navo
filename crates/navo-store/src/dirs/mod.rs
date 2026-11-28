@@ -162,6 +162,12 @@ impl StoreDirs {
         self.data.join("session.bin")
     }
 
+    /// Folder for durable editor drafts in the data folder (`<data>/drafts`).
+    #[must_use]
+    pub fn drafts_dir(&self) -> PathBuf {
+        self.data.join("drafts")
+    }
+
     pub fn ensure(&self) -> io::Result<()> {
         std::fs::create_dir_all(&self.config)?;
         std::fs::create_dir_all(&self.data)
