@@ -4,7 +4,9 @@ use std::ops::ControlFlow;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use navo_core::find::{Attribute, Date, FileHits, FindQuery, ModifiedFilter, SizeFilter};
+use navo_core::find::{
+    Attribute, Compiled, Date, FileHits, FindQuery, ModifiedFilter, NameFilter, SizeFilter,
+};
 use navo_core::{FsError, Location, ProviderPath};
 
 use crate::{
@@ -57,7 +59,7 @@ pub fn find_files(
     if cancel.is_cancelled() {
         return Err(FindError::Cancelled);
     }
-    let compiled = navo_core::find::Compiled::new(query).map_err(FindError::Invalid)?;
+    let compiled = Compiled::new(query).map_err(FindError::Invalid)?;
     let queue = Pools::shared().queue(JobKind::Find);
     let owner = queue.owner();
     let slot = JobSlot {
@@ -71,7 +73,7 @@ pub fn find_files(
     queue.submit(
         slot,
         Box::new(move |_| {
-            let result = walk::Walk::new(&query, &signal, &mut |batch| {
+            let result = walk::Walk::new(&query, &compiled, &signal, &mut |batch| {
                 if send.send(Event::Batch(batch)).is_ok() {
                     ControlFlow::Continue(())
                 } else {
@@ -95,8 +97,8 @@ pub fn walk_files(
     if cancel.is_cancelled() {
         return Err(FindError::Cancelled);
     }
-    let compiled = navo_core::find::Compiled::new(query).map_err(FindError::Invalid)?;
-    walk::Walk::new(query, cancel, &mut |batch| {
+    let compiled = Compiled::new(query).map_err(FindError::Invalid)?;
+    walk::Walk::new(query, &compiled, cancel, &mut |batch| {
         sink(rebase_batch(batch, base, &root))
     })
     .run(&root, &compiled)
@@ -184,17 +186,22 @@ pub fn search_root(base: &Location, within: Option<&str>) -> Result<Location, Fi
 
 struct Filters<'a> {
     query: &'a FindQuery,
+    name: Option<&'a NameFilter>,
     now: i64,
 }
 
 impl<'a> Filters<'a> {
-    fn new(query: &'a FindQuery) -> Self {
+    fn new(query: &'a FindQuery, compiled: &'a Compiled) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .ok()
             .and_then(|duration| i64::try_from(duration.as_millis()).ok())
             .unwrap_or_default();
-        Self { query, now }
+        Self {
+            query,
+            name: compiled.name_filter(),
+            now,
+        }
     }
 
     fn folder(&self, entry: &FsEntry) -> bool {
@@ -212,6 +219,9 @@ impl<'a> Filters<'a> {
 
     fn file(&self, location: Option<&Location>, entry: &FsEntry) -> bool {
         let name = entry.name.to_text();
+        if self.name.is_some_and(|filter| !filter.matches(&name)) {
+            return false;
+        }
         if !self.query.ext.is_empty()
             && !name.rsplit_once('.').is_some_and(|(_, ext)| {
                 self.query

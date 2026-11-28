@@ -46,11 +46,12 @@ impl PendingFolder {
 impl<'a> Walk<'a> {
     pub(super) fn new(
         query: &'a FindQuery,
+        compiled: &'a Compiled,
         cancel: &'a CancelToken,
         sink: &'a mut dyn FnMut(FoundBatch) -> ControlFlow<()>,
     ) -> Self {
         Self {
-            filters: Filters::new(query),
+            filters: Filters::new(query, compiled),
             cancel,
             sink,
             progress: FindProgress::default(),

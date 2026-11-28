@@ -1,5 +1,6 @@
 mod archives;
 mod gitignore;
+mod names;
 
 use std::fs::{self, File, FileTimes};
 use std::ops::ControlFlow;

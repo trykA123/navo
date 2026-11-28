@@ -5,7 +5,7 @@ use zip::write::SimpleFileOptions;
 
 use super::{names, search, write};
 
-fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
+pub(super) fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for (name, bytes) in entries {
         writer
