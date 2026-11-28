@@ -6,7 +6,12 @@ const INDEX_MODES: [Choice; 4] = [
     choice("settings-search-index-walk", "walk"),
     choice("settings-search-index-off", "off"),
 ];
-pub(super) const SEARCH_ROWS: [FieldSpec; 6] = [
+const ALT_F7_MODES: [Choice; 2] = [
+    choice("settings-search-alt-f7-palette", "palette"),
+    choice("settings-search-alt-f7-classic", "classic"),
+];
+
+pub(super) const SEARCH_ROWS: [FieldSpec; 7] = [
     spec(
         (F::SearchIndex, S::Search, "search.index"),
         ("settings-search-index", "settings-search-index-help"),
@@ -39,6 +44,11 @@ pub(super) const SEARCH_ROWS: [FieldSpec; 6] = [
         (F::SearchRemember, S::Search, "search.remember"),
         ("settings-search-remember", "settings-search-remember-help"),
         Control::Toggle,
+    ),
+    spec(
+        (F::SearchAltF7Opens, S::Search, "search.alt-f7-opens"),
+        ("settings-search-alt-f7", "settings-search-alt-f7-help"),
+        Control::Choices(&ALT_F7_MODES, Look::Segments),
     ),
 ];
 

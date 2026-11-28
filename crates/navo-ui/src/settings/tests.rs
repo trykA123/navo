@@ -491,10 +491,12 @@ fn the_search_page_has_one_row_per_search_key_with_the_store_defaults() {
             "search.drives",
             "search.exclude",
             "search.remember",
+            "search.alt-f7-opens",
         ]
     );
     let values = Values::default();
     assert_eq!(values.get(Field::SearchIndex), &Value::Pick(0));
+    assert_eq!(values.get(Field::SearchAltF7Opens), &Value::Pick(0));
     assert_eq!(values.get(Field::SearchRemember), &Value::Flag(true));
     assert_eq!(values.get(Field::SearchNetwork), &Value::Flag(false));
     assert_eq!(
@@ -502,6 +504,24 @@ fn the_search_page_has_one_row_per_search_key_with_the_store_defaults() {
         &Value::Text("$Recycle.Bin, System Volume Information".into())
     );
     assert!(Field::SearchDrives.is_list() && Field::SearchExclude.is_list());
+}
+
+#[test]
+fn alt_f7_opens_the_palette_and_switches_to_the_classic_find_dialog() {
+    let values = Values::default();
+    assert_eq!(values.get(Field::SearchAltF7Opens), &Value::Pick(0));
+    assert_eq!(values.alt_f7_opens(), navo_store::AltF7Opens::Palette);
+    let classic = values.with(&Change {
+        field: Field::SearchAltF7Opens,
+        value: Value::Pick(1),
+    });
+    assert_eq!(classic.get(Field::SearchAltF7Opens), &Value::Pick(1));
+    assert_eq!(classic.alt_f7_opens(), navo_store::AltF7Opens::Classic);
+    let back = classic.with(&Change {
+        field: Field::SearchAltF7Opens,
+        value: Value::Pick(0),
+    });
+    assert_eq!(back.alt_f7_opens(), navo_store::AltF7Opens::Palette);
 }
 
 #[test]

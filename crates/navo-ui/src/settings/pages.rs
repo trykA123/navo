@@ -176,7 +176,10 @@ pub const GROUPS: [Group; 23] = [
             F::SearchExclude,
         ],
     ),
-    group("settings-group-ctrl-k-history", &[F::SearchRemember]),
+    group(
+        "settings-group-ctrl-k-history",
+        &[F::SearchRemember, F::SearchAltF7Opens],
+    ),
     group(
         "settings-group-text-and-code",
         &[F::TextLineNumbers, F::TextLineEnds, F::TextSyntaxTheme],

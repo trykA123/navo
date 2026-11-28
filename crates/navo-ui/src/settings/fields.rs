@@ -50,6 +50,7 @@ pub enum Field {
     SearchNetwork,
     SearchRemovable,
     SearchRemember,
+    SearchAltF7Opens,
     GitBadges,
     GitTool,
     GitToolCommand,
@@ -221,7 +222,7 @@ pub(super) const fn spec(
 pub(super) use Field as F;
 pub(super) use Section as S;
 
-pub const FIELDS: [FieldSpec; 89] = join([
+pub const FIELDS: [FieldSpec; 90] = join([
     &GENERAL,
     &SEARCH_ROWS,
     &GIT_FIELDS,

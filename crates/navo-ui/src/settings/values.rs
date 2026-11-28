@@ -3,6 +3,7 @@ mod copy;
 use gpui_kit::SharedString;
 use navo_core::Tiles;
 use navo_fs::CopyMode;
+use navo_store::AltF7Opens;
 
 use super::fields::{Control, FIELDS, Field, FieldSpec, PRESETS};
 use super::git_page::AUTO as AUTO_TOOL;
@@ -24,6 +25,7 @@ const RIGHT_BUTTON_ORDER: [RightButton; 2] = [RightButton::TotalCommander, Right
 const SIZE_ORDER: [SizeMode; 2] = [SizeMode::Apparent, SizeMode::OnDisk];
 const SHOWN: usize = 0;
 const HIDDEN: usize = 1;
+const CLASSIC_FIND: usize = 1;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Value {
@@ -315,6 +317,15 @@ impl Values {
 
     pub fn show_hidden(&self) -> bool {
         self.pick(Field::HiddenFiles) == SHOWN
+    }
+
+    /// What Alt+F7 opens: the command palette's find mode or the classic Find dialog.
+    pub fn alt_f7_opens(&self) -> AltF7Opens {
+        if self.pick(Field::SearchAltF7Opens) == CLASSIC_FIND {
+            AltF7Opens::Classic
+        } else {
+            AltF7Opens::Palette
+        }
     }
 
     pub fn flag(&self, field: Field) -> bool {
